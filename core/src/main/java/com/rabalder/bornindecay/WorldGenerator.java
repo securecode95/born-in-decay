@@ -7,11 +7,11 @@ import com.badlogic.gdx.math.Vector3;
 
 import java.util.*;
 
-
 public class WorldGenerator {
     private final Map<Vector2, Chunk> activeChunks = new HashMap<>();
     private final Model blockModel;
     private final OpenSimplexNoise noise;
+    private final long seed;
     private final int viewDistance = 2;
     private final int maxTerrainHeight = 6;
 
@@ -19,7 +19,8 @@ public class WorldGenerator {
 
     public WorldGenerator(Model blockModel, long seed) {
         this.blockModel = blockModel;
-        this.noise = new OpenSimplexNoise(seed);
+        this.seed = seed;
+        this.noise = new OpenSimplexNoise(); // ✅ No args
     }
 
     public void update(Vector3 playerPosition) {
@@ -55,24 +56,17 @@ public class WorldGenerator {
     }
 
     private Chunk generateChunk(int chunkX, int chunkZ) {
-        Chunk chunk = new Chunk(null, chunkX * Chunk.SIZE, 0, chunkZ * Chunk.SIZE);
+        Chunk chunk = new Chunk(blockModel, chunkX * Chunk.SIZE, 0, chunkZ * Chunk.SIZE);
         for (int x = 0; x < Chunk.SIZE; x++) {
             for (int z = 0; z < Chunk.SIZE; z++) {
                 int worldX = chunkX * Chunk.SIZE + x;
                 int worldZ = chunkZ * Chunk.SIZE + z;
 
-                double heightNoise = noise.noise2D(worldX * 0.1, worldZ * 0.1);
-                int height = (int) (heightNoise * maxTerrainHeight + maxTerrainHeight);
+                float heightNoise = OpenSimplexNoise.noise2(seed, worldX * 0.1, worldZ * 0.1);
+                int height = (int) (heightNoise * maxTerrainHeight + maxTerrainHeight / 2f);
 
                 for (int y = 0; y <= height; y++) {
-                    Model model;
-                    if (y == height) {
-                        model = Materials.GRASSY_BLOCK_MODEL;
-                    } else {
-                        model = Materials.DECAYED_SOIL_MODEL;
-                    }
-
-                    ModelInstance block = new ModelInstance(model);
+                    ModelInstance block = new ModelInstance(blockModel);
                     block.transform.setToTranslation(worldX, y, worldZ);
                     chunk.blocks[x][y][z] = block;
                 }

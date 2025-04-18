@@ -55,7 +55,7 @@ public class BornInDecay extends ApplicationAdapter {
         float deltaTime = Gdx.graphics.getDeltaTime();
 
         // 🌍 Get current visible blocks
-        List<ModelInstance> visibleBlocks = worldManager.getVisibleBlocks(player.position);
+        List<ModelInstance> visibleBlocks = worldManager.getVisibleBlocks();
 
 
         // 🧍 Update player movement
