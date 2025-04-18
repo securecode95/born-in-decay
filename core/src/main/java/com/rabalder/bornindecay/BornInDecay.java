@@ -11,15 +11,15 @@ import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Vector3;
+import java.util.List;
 
-import java.util.ArrayList;
 
 public class BornInDecay extends ApplicationAdapter {
     private PerspectiveCamera camera;
     private ModelBatch modelBatch;
     private Environment environment;
     private ShapeRenderer shapeRenderer;
-    //update 101
+
     private PlayerController player;
     private ModelInstance highlightInstance;
     private boolean highlightVisible = false;
@@ -46,7 +46,8 @@ public class BornInDecay extends ApplicationAdapter {
         environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.8f, 0.8f, 0.8f, 1f));
         environment.add(new DirectionalLight().set(Color.WHITE, -1f, -0.8f, -0.2f));
 
-        worldManager = new WorldManager(Materials.GRASSY_BLOCK_MODEL, Materials.DECAYED_SOIL_MODEL);
+        worldManager = new WorldManager(Materials.GRASSY_BLOCK_MODEL);
+
     }
 
     @Override
@@ -54,7 +55,8 @@ public class BornInDecay extends ApplicationAdapter {
         float deltaTime = Gdx.graphics.getDeltaTime();
 
         // 🌍 Get current visible blocks
-        ArrayList<ModelInstance> visibleBlocks = worldManager.getVisibleBlocks(player.position);
+        List<ModelInstance> visibleBlocks = worldManager.getVisibleBlocks(player.position);
+
 
         // 🧍 Update player movement
         player.update(camera, deltaTime, visibleBlocks);

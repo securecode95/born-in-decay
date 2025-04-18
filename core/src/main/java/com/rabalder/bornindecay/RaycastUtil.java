@@ -6,12 +6,12 @@ import com.badlogic.gdx.graphics.g3d.ModelInstance;
 import com.badlogic.gdx.math.Intersector;
 import com.badlogic.gdx.math.collision.Ray;
 import com.badlogic.gdx.math.Vector3;
-
-import java.util.ArrayList;
+import java.util.List;
 
 public class RaycastUtil {
 
-    public static ModelInstance getTargetedBlock(Camera camera, ArrayList<ModelInstance> blocks, float maxDistance) {
+    public static ModelInstance getTargetedBlock(Camera camera, List<ModelInstance> blocks, float maxDistance)
+    {
         Ray ray = new Ray(camera.position.cpy(), camera.direction.cpy().nor());
         ModelInstance closest = null;
         float closestDist = maxDistance;

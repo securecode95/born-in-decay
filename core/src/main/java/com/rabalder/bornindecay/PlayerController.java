@@ -5,7 +5,7 @@ import com.badlogic.gdx.Input;
 import com.badlogic.gdx.graphics.PerspectiveCamera;
 import com.badlogic.gdx.graphics.g3d.ModelInstance;
 import com.badlogic.gdx.math.Vector3;
-
+import java.util.List;
 import java.util.ArrayList;
 
 public class PlayerController {
@@ -21,7 +21,7 @@ public class PlayerController {
 
     private final float mouseSensitivity = 0.2f;
 
-    public void update(PerspectiveCamera camera, float delta, ArrayList<ModelInstance> blocks) {
+    public void update(PerspectiveCamera camera, float delta, List<ModelInstance> blocks) {
         // Mouse movement
         float deltaX = Gdx.input.getDeltaX() * mouseSensitivity;
         float deltaY = -Gdx.input.getDeltaY() * mouseSensitivity;
@@ -106,7 +106,8 @@ public class PlayerController {
         }
     }
 
-    private boolean isColliding(Vector3 pos, ArrayList<ModelInstance> blocks) {
+    private boolean isColliding(Vector3 pos, List<ModelInstance> blocks)
+    {
         float size = 0.4f;
         for (ModelInstance block : blocks) {
             Vector3 bp = block.transform.getTranslation(new Vector3());

@@ -7,14 +7,15 @@ import com.badlogic.gdx.math.Vector3;
 
 import java.util.*;
 
+
 public class WorldGenerator {
     private final Map<Vector2, Chunk> activeChunks = new HashMap<>();
     private final Model blockModel;
     private final OpenSimplexNoise noise;
-
-    public final List<ModelInstance> visibleBlocks = new ArrayList<>();
     private final int viewDistance = 2;
     private final int maxTerrainHeight = 6;
+
+    private final List<ModelInstance> visibleBlocks = new ArrayList<>();
 
     public WorldGenerator(Model blockModel, long seed) {
         this.blockModel = blockModel;
@@ -54,7 +55,7 @@ public class WorldGenerator {
     }
 
     private Chunk generateChunk(int chunkX, int chunkZ) {
-        Chunk chunk = new Chunk(blockModel, chunkX * Chunk.SIZE, 0, chunkZ * Chunk.SIZE);
+        Chunk chunk = new Chunk(null, chunkX * Chunk.SIZE, 0, chunkZ * Chunk.SIZE);
         for (int x = 0; x < Chunk.SIZE; x++) {
             for (int z = 0; z < Chunk.SIZE; z++) {
                 int worldX = chunkX * Chunk.SIZE + x;
@@ -64,7 +65,14 @@ public class WorldGenerator {
                 int height = (int) (heightNoise * maxTerrainHeight + maxTerrainHeight);
 
                 for (int y = 0; y <= height; y++) {
-                    ModelInstance block = new ModelInstance(blockModel);
+                    Model model;
+                    if (y == height) {
+                        model = Materials.GRASSY_BLOCK_MODEL;
+                    } else {
+                        model = Materials.DECAYED_SOIL_MODEL;
+                    }
+
+                    ModelInstance block = new ModelInstance(model);
                     block.transform.setToTranslation(worldX, y, worldZ);
                     chunk.blocks[x][y][z] = block;
                 }
@@ -97,5 +105,9 @@ public class WorldGenerator {
                 }
             }
         }
+    }
+
+    public List<ModelInstance> getVisibleBlocks() {
+        return visibleBlocks;
     }
 }
