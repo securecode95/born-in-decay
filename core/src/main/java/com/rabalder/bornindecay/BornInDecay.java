@@ -11,6 +11,7 @@ import com.badlogic.gdx.graphics.g3d.*;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
+import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Vector3;
 
 import java.util.ArrayList;
@@ -24,21 +25,21 @@ public class BornInDecay extends ApplicationAdapter {
     private PlayerController player;
     private ModelInstance highlightInstance;
     private boolean highlightVisible = false;
+    private ShapeRenderer shapeRenderer;
 
     @Override
     public void create() {
         modelBatch = new ModelBatch();
+        shapeRenderer = new ShapeRenderer();
         Model decayedModel = Materials.DECAYED_SOIL_MODEL;
         Model grassyModel = Materials.GRASSY_BLOCK_MODEL;
 
         camera = new PerspectiveCamera(67, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-        camera.position.set(8f, 8f, 20f);
         camera.near = 0.1f;
         camera.far = 1000f;
-        camera.update();
 
         player = new PlayerController();
-        player.resetLook(camera);
+        player.resetLook();
 
         highlightInstance = new ModelInstance(Materials.HIGHLIGHT_CUBE);
         Gdx.input.setCursorCatched(true);
@@ -47,13 +48,11 @@ public class BornInDecay extends ApplicationAdapter {
         environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.8f, 0.8f, 0.8f, 1f));
         environment.add(new DirectionalLight().set(Color.WHITE, -1f, -0.8f, -0.2f));
 
-        // Create block model
         ModelBuilder modelBuilder = new ModelBuilder();
         cubeModel = modelBuilder.createBox(1f, 1f, 1f,
             new Material(ColorAttribute.createDiffuse(Color.GREEN)),
             VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal);
 
-        // Load chunks
         cubes = new ArrayList<>();
         int chunkCountX = 2;
         int chunkCountZ = 2;
@@ -77,28 +76,34 @@ public class BornInDecay extends ApplicationAdapter {
 
     @Override
     public void render() {
-        player.update(camera, Gdx.graphics.getDeltaTime(), cubes);
+        float deltaTime = Gdx.graphics.getDeltaTime();
 
-        // 🔫 Raycast target
+        // FIRST: update player logic
+        player.update(camera, deltaTime, cubes);
+
+        // Debug print (optional)
+        // System.out.println("Cam Pos: " + camera.position + " Dir: " + camera.direction);
+
+        // Highlight target block
         ModelInstance targetBlock = RaycastUtil.getTargetedBlock(camera, cubes, 6f);
         if (targetBlock != null) {
             Vector3 targetPos = targetBlock.transform.getTranslation(new Vector3());
-            highlightInstance.transform.setToTranslation(targetPos);
+            highlightInstance.transform.setToTranslation(
+                Math.round(targetPos.x - 0.5f) + 0.5f,
+                Math.round(targetPos.y - 0.5f) + 0.5f,
+                Math.round(targetPos.z - 0.5f) + 0.5f
+            );
             highlightVisible = true;
         } else {
             highlightVisible = false;
         }
 
-        // 🔨 Remove block
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT) && targetBlock != null) {
             cubes.remove(targetBlock);
         }
 
-        // 🧱 Place block
         if (Gdx.input.isButtonJustPressed(Input.Buttons.RIGHT) && targetBlock != null) {
             Vector3 placePos = RaycastUtil.getPlacementPosition(targetBlock, camera);
-
-            // Snap to grid
             placePos.set(
                 (float) Math.floor(placePos.x) + 0.5f,
                 (float) Math.floor(placePos.y) + 0.5f,
@@ -110,7 +115,6 @@ public class BornInDecay extends ApplicationAdapter {
             cubes.add(newBlock);
         }
 
-        // Mouse locking
         if (!Gdx.input.isCursorCatched() && Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
             Gdx.input.setCursorCatched(true);
         }
@@ -122,7 +126,6 @@ public class BornInDecay extends ApplicationAdapter {
         Gdx.gl.glClearColor(0.05f, 0.05f, 0.1f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
 
-        camera.update();
         modelBatch.begin(camera);
 
         if (highlightVisible) {
@@ -134,6 +137,12 @@ public class BornInDecay extends ApplicationAdapter {
         }
 
         modelBatch.end();
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+        shapeRenderer.setColor(1f, 1f, 1f, 1f); // white
+        float radius = 3f;
+        shapeRenderer.circle(Gdx.graphics.getWidth() / 2f, Gdx.graphics.getHeight() / 2f, radius);
+        shapeRenderer.end();
+
     }
 
     @Override
@@ -141,5 +150,6 @@ public class BornInDecay extends ApplicationAdapter {
         modelBatch.dispose();
         cubeModel.dispose();
         Materials.dispose();
+        shapeRenderer.dispose();
     }
 }

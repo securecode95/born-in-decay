@@ -1,5 +1,6 @@
 package com.rabalder.bornindecay;
 
+import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Camera;
 import com.badlogic.gdx.graphics.g3d.ModelInstance;
 import com.badlogic.gdx.math.Intersector;
@@ -37,7 +38,6 @@ public class RaycastUtil {
         Vector3 targetPos = target.transform.getTranslation(new Vector3());
         Vector3 dir = camera.direction.cpy().nor();
 
-        // Snap to dominant axis to place on correct face
         Vector3 offset = new Vector3(
             Math.abs(dir.x) > Math.abs(dir.y) && Math.abs(dir.x) > Math.abs(dir.z) ? Math.signum(dir.x) : 0,
             Math.abs(dir.y) > Math.abs(dir.x) && Math.abs(dir.y) > Math.abs(dir.z) ? Math.signum(dir.y) : 0,
