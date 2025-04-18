@@ -60,7 +60,7 @@ public class WorldGenerator {
                 int worldX = chunkX * Chunk.SIZE + x;
                 int worldZ = chunkZ * Chunk.SIZE + z;
 
-                double heightNoise = noise.eval(worldX * 0.1, worldZ * 0.1);
+                double heightNoise = noise.noise2D(worldX * 0.1, worldZ * 0.1);
                 int height = (int) (heightNoise * maxTerrainHeight + maxTerrainHeight);
 
                 for (int y = 0; y <= height; y++) {

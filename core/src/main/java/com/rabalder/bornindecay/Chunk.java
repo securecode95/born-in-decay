@@ -27,4 +27,10 @@ public class Chunk {
             }
         }
     }
+
+    public void setBlock(int x, int y, int z, ModelInstance instance) {
+        if (x >= 0 && x < SIZE && y >= 0 && y < SIZE && z >= 0 && z < SIZE) {
+            blocks[x][y][z] = instance;
+        }
+    }
 }

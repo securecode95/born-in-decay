@@ -6,11 +6,9 @@ import com.badlogic.gdx.Input;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.PerspectiveCamera;
-import com.badlogic.gdx.graphics.VertexAttributes;
 import com.badlogic.gdx.graphics.g3d.*;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
-import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Vector3;
 
@@ -20,12 +18,13 @@ public class BornInDecay extends ApplicationAdapter {
     private PerspectiveCamera camera;
     private ModelBatch modelBatch;
     private Environment environment;
-    private Model cubeModel;
-    private ArrayList<ModelInstance> cubes;
+    private ShapeRenderer shapeRenderer;
+    //update 101
     private PlayerController player;
     private ModelInstance highlightInstance;
     private boolean highlightVisible = false;
-    private ShapeRenderer shapeRenderer;
+
+    private WorldManager worldManager;
 
     @Override
     public void create() {
@@ -37,7 +36,7 @@ public class BornInDecay extends ApplicationAdapter {
         camera.far = 1000f;
 
         player = new PlayerController();
-        player.position.set(8f, 1.5f, 8f); // ✅ Set position on top of chunk at (0, 0)
+        player.position.set(8f, 10f, 8f); // start above terrain
         player.resetLook();
 
         highlightInstance = new ModelInstance(Materials.HIGHLIGHT_CUBE);
@@ -47,59 +46,35 @@ public class BornInDecay extends ApplicationAdapter {
         environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.8f, 0.8f, 0.8f, 1f));
         environment.add(new DirectionalLight().set(Color.WHITE, -1f, -0.8f, -0.2f));
 
-        ModelBuilder modelBuilder = new ModelBuilder();
-        cubeModel = modelBuilder.createBox(1f, 1f, 1f,
-            new Material(ColorAttribute.createDiffuse(Color.GREEN)),
-            VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal);
-
-        cubes = new ArrayList<>();
-        int chunkCountX = 2;
-        int chunkCountZ = 2;
-
-        for (int cx = 0; cx < chunkCountX; cx++) {
-            for (int cz = 0; cz < chunkCountZ; cz++) {
-                Chunk chunk = new Chunk(cubeModel, cx * Chunk.SIZE, 0, cz * Chunk.SIZE);
-                for (int x = 0; x < Chunk.SIZE; x++) {
-                    for (int y = 0; y < Chunk.SIZE; y++) {
-                        for (int z = 0; z < Chunk.SIZE; z++) {
-                            ModelInstance block = chunk.blocks[x][y][z];
-                            if (block != null) {
-                                cubes.add(block);
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        worldManager = new WorldManager(Materials.GRASSY_BLOCK_MODEL, Materials.DECAYED_SOIL_MODEL);
     }
 
     @Override
     public void render() {
         float deltaTime = Gdx.graphics.getDeltaTime();
 
-        player.update(camera, deltaTime, cubes);
+        // 🌍 Get current visible blocks
+        ArrayList<ModelInstance> visibleBlocks = worldManager.getVisibleBlocks(player.position);
 
-        // Highlight block
-        ModelInstance targetBlock = RaycastUtil.getTargetedBlock(camera, cubes, 6f);
+        // 🧍 Update player movement
+        player.update(camera, deltaTime, visibleBlocks);
+
+        // 🔍 Highlight block
+        ModelInstance targetBlock = RaycastUtil.getTargetedBlock(camera, visibleBlocks, 6f);
         if (targetBlock != null) {
             Vector3 targetPos = targetBlock.transform.getTranslation(new Vector3());
-            highlightInstance.transform.setToTranslation(
-                targetPos.x,
-                targetPos.y,
-                targetPos.z
-            );
+            highlightInstance.transform.setToTranslation(targetPos);
             highlightVisible = true;
         } else {
             highlightVisible = false;
         }
 
-
-        // Remove block
+        // ⛏ Remove block
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT) && targetBlock != null) {
-            cubes.remove(targetBlock);
+            visibleBlocks.remove(targetBlock);
         }
 
-        // Place block
+        // 🧱 Place block
         if (Gdx.input.isButtonJustPressed(Input.Buttons.RIGHT) && targetBlock != null) {
             Vector3 placePos = RaycastUtil.getPlacementPosition(targetBlock, camera);
             placePos.set(
@@ -110,9 +85,10 @@ public class BornInDecay extends ApplicationAdapter {
 
             ModelInstance newBlock = new ModelInstance(Materials.GRASSY_BLOCK_MODEL);
             newBlock.transform.setToTranslation(placePos);
-            cubes.add(newBlock);
+            visibleBlocks.add(newBlock);
         }
 
+        // 🔒 Cursor lock toggle
         if (!Gdx.input.isCursorCatched() && Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
             Gdx.input.setCursorCatched(true);
         }
@@ -120,22 +96,22 @@ public class BornInDecay extends ApplicationAdapter {
             Gdx.input.setCursorCatched(false);
         }
 
+        // 🧼 Clear screen
         Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         Gdx.gl.glClearColor(0.05f, 0.05f, 0.1f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
 
+        // 🖼 Render all blocks + highlight
         modelBatch.begin(camera);
-        if (highlightVisible) {
-            modelBatch.render(highlightInstance, environment);
-        }
-        for (ModelInstance cube : cubes) {
-            modelBatch.render(cube, environment);
+        if (highlightVisible) modelBatch.render(highlightInstance, environment);
+        for (ModelInstance block : visibleBlocks) {
+            modelBatch.render(block, environment);
         }
         modelBatch.end();
 
-        // Draw cursor
+        // 🎯 Draw center circle cursor
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-        shapeRenderer.setColor(1f, 1f, 1f, 1f);
+        shapeRenderer.setColor(Color.WHITE);
         shapeRenderer.circle(Gdx.graphics.getWidth() / 2f, Gdx.graphics.getHeight() / 2f, 3f);
         shapeRenderer.end();
     }
@@ -143,8 +119,7 @@ public class BornInDecay extends ApplicationAdapter {
     @Override
     public void dispose() {
         modelBatch.dispose();
-        cubeModel.dispose();
-        Materials.dispose();
         shapeRenderer.dispose();
+        Materials.dispose();
     }
 }
