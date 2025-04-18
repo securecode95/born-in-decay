@@ -1,26 +1,20 @@
 package com.rabalder.bornindecay;
 
-import com.badlogic.gdx.graphics.g3d.Model;
 import com.badlogic.gdx.graphics.g3d.ModelInstance;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.math.Vector3;
 
 import java.util.*;
 
-
 public class WorldGenerator {
     private final Map<Vector2, Chunk> activeChunks = new HashMap<>();
     private final Map<Vector2, ModelInstance> chunkMeshes = new HashMap<>();
-    private final Model grassModel;
-    private final Model soilModel;
     private final OpenSimplexNoise noise;
     private final long seed;
     private final int viewDistance = 2;
     private final int maxTerrainHeight = 8;
 
-    public WorldGenerator(Model grassModel, Model soilModel, long seed, long seed1) {
-        this.grassModel = grassModel;
-        this.soilModel = soilModel;
+    public WorldGenerator(long seed) {
         this.seed = seed;
         this.noise = new OpenSimplexNoise();
     }
@@ -42,9 +36,9 @@ public class WorldGenerator {
                     Chunk newChunk = generateChunk(chunkX, chunkZ);
                     activeChunks.put(chunkCoord, newChunk);
 
-                    // Mesh the chunk
+                    // Apply greedy meshing to the chunk and generate a ModelInstance
                     ChunkMeshBuilder builder = new ChunkMeshBuilder();
-                    ModelInstance mesh = builder.buildChunkMesh(newChunk);
+                    ModelInstance mesh = builder.buildChunkMesh(newChunk); // mesh generated via greedy meshing
                     chunkMeshes.put(chunkCoord, mesh);
                 }
             }
@@ -83,12 +77,13 @@ public class WorldGenerator {
         return chunk;
     }
 
-    public List<ModelInstance> getVisibleBlocks() {
+    // This method returns the visible chunks with greedy meshing applied
+    public List<ModelInstance> getVisibleChunks() {
         return new ArrayList<>(chunkMeshes.values());
     }
 
+    // This method is to access active chunks if needed (e.g., for further management)
     public Collection<Chunk> getActiveChunks() {
         return activeChunks.values();
     }
-
 }

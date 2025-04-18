@@ -65,13 +65,16 @@ public class BornInDecay extends ApplicationAdapter {
     public void render() {
         float deltaTime = Gdx.graphics.getDeltaTime();
 
+        // Update the world (chunks, meshes, etc.)
         worldManager.update(player.position);
-        List<ModelInstance> visibleBlocks = worldManager.getChunkMeshes();
 
-        player.update(camera, deltaTime, visibleBlocks);
+        // Get all visible chunk meshes after greedy meshing is applied
+        List<ModelInstance> visibleChunks = worldManager.getChunkMeshes(); // This should return the chunk meshes
 
-        // 🎯 Highlight block
-        ModelInstance targetBlock = RaycastUtil.getTargetedBlock(camera, visibleBlocks, 6f);
+        player.update(camera, deltaTime, visibleChunks);
+
+        // 🎯 Highlight block (This should remain the same for block interaction)
+        ModelInstance targetBlock = RaycastUtil.getTargetedBlock(camera, visibleChunks, 6f);
         if (targetBlock != null) {
             Vector3 targetPos = targetBlock.transform.getTranslation(new Vector3());
             highlightInstance.transform.setToTranslation(targetPos);
@@ -80,22 +83,22 @@ public class BornInDecay extends ApplicationAdapter {
             highlightVisible = false;
         }
 
-        // 🔨 Remove
+        // 🔨 Block removal (Remove block when left mouse button is pressed)
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT) && targetBlock != null) {
-            visibleBlocks.remove(targetBlock);
+            visibleChunks.remove(targetBlock);
         }
 
-        // ➕ Place
+        // ➕ Block placement (Place block when right mouse button is pressed)
         if (Gdx.input.isButtonJustPressed(Input.Buttons.RIGHT) && targetBlock != null) {
             Vector3 placePos = RaycastUtil.getPlacementPosition(targetBlock, camera);
             placePos.set(Math.round(placePos.x), Math.round(placePos.y), Math.round(placePos.z));
 
-            ModelInstance newBlock = new ModelInstance(Materials.GRASSY_BLOCK_MODEL);
+            ModelInstance newBlock = new ModelInstance(Materials.GRASSY_BLOCK_MODEL); // Use appropriate model
             newBlock.transform.setToTranslation(placePos);
-            visibleBlocks.add(newBlock);
+            visibleChunks.add(newBlock);
         }
 
-        // 🖱 Cursor lock
+        // 🖱 Cursor locking (Ensure the mouse is locked in the game window)
         if (!Gdx.input.isCursorCatched() && Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
             Gdx.input.setCursorCatched(true);
         }
@@ -108,29 +111,30 @@ public class BornInDecay extends ApplicationAdapter {
         Gdx.gl.glClearColor(0.05f, 0.05f, 0.1f, 1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
 
-        // 🖼 Render
+        // 🖼 Render chunk meshes
         modelBatch.begin(camera);
 
         if (highlightVisible) {
-            modelBatch.render(highlightInstance, environment);
+            modelBatch.render(highlightInstance, environment); // Highlight the target block
         }
 
-        for (ModelInstance block : visibleBlocks) {
-            Vector3 blockPos = block.transform.getTranslation(new Vector3());
-            if (camera.frustum.boundsInFrustum(blockPos, new Vector3(0.5f, 0.5f, 0.5f))) {
-                modelBatch.render(block, environment);
+        // Render the chunk meshes
+        for (ModelInstance chunkMesh : visibleChunks) {
+            Vector3 chunkPos = chunkMesh.transform.getTranslation(new Vector3());
+            if (camera.frustum.boundsInFrustum(chunkPos, new Vector3(0.5f, 0.5f, 0.5f))) {
+                modelBatch.render(chunkMesh, environment);
             }
         }
 
         modelBatch.end();
 
-        // 🖌 Cursor
+        // 🖌 Draw the cursor (if needed)
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         shapeRenderer.setColor(Color.WHITE);
         shapeRenderer.circle(Gdx.graphics.getWidth() / 2f, Gdx.graphics.getHeight() / 2f, 3f);
         shapeRenderer.end();
 
-        // 🧾 FPS counter
+        // 🧾 FPS counter (To monitor the frame rate)
         spriteBatch.begin();
         font.draw(spriteBatch, "FPS: " + Gdx.graphics.getFramesPerSecond(), 10, Gdx.graphics.getHeight() - 10);
         spriteBatch.end();
@@ -139,8 +143,8 @@ public class BornInDecay extends ApplicationAdapter {
         if (!Gdx.input.isCursorCatched() && Gdx.input.isTouched()) {
             Gdx.input.setCursorCatched(true);
         }
-
     }
+
 
 
     @Override

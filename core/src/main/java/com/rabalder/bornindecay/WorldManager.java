@@ -11,11 +11,12 @@ public class WorldManager {
     private final WorldGenerator generator;
 
     public WorldManager(Model grassModel, Model soilModel) {
-        this.generator = new WorldGenerator(grassModel, soilModel, System.currentTimeMillis(), 2);
+        long seed = System.currentTimeMillis();  // Set the seed value here, you can use a fixed value or current time
+        this.generator = new WorldGenerator(seed);  // Pass the seed to WorldGenerator constructor
     }
 
     public void update(Vector3 playerPosition) {
-        generator.update(playerPosition);
+        generator.update(playerPosition);  // Update the world (chunks and meshes)
     }
 
     // ✅ Returns all visible chunk meshes (used for rendering)
@@ -23,9 +24,9 @@ public class WorldManager {
         List<ModelInstance> meshes = new ArrayList<>();
         for (Chunk chunk : generator.getActiveChunks()) {
             if (chunk.meshInstance != null) {
-                meshes.add(chunk.meshInstance);
+                meshes.add(chunk.meshInstance);  // Add the mesh of each chunk to the list
             }
         }
-        return meshes;
+        return meshes;  // Return the list of chunk meshes
     }
 }
