@@ -31,14 +31,13 @@ public class BornInDecay extends ApplicationAdapter {
     public void create() {
         modelBatch = new ModelBatch();
         shapeRenderer = new ShapeRenderer();
-        Model decayedModel = Materials.DECAYED_SOIL_MODEL;
-        Model grassyModel = Materials.GRASSY_BLOCK_MODEL;
 
         camera = new PerspectiveCamera(67, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
         camera.near = 0.1f;
         camera.far = 1000f;
 
         player = new PlayerController();
+        player.position.set(8f, 1.5f, 8f); // ✅ Set position on top of chunk at (0, 0)
         player.resetLook();
 
         highlightInstance = new ModelInstance(Materials.HIGHLIGHT_CUBE);
@@ -78,13 +77,9 @@ public class BornInDecay extends ApplicationAdapter {
     public void render() {
         float deltaTime = Gdx.graphics.getDeltaTime();
 
-        // FIRST: update player logic
         player.update(camera, deltaTime, cubes);
 
-        // Debug print (optional)
-        // System.out.println("Cam Pos: " + camera.position + " Dir: " + camera.direction);
-
-        // Highlight target block
+        // Highlight block
         ModelInstance targetBlock = RaycastUtil.getTargetedBlock(camera, cubes, 6f);
         if (targetBlock != null) {
             Vector3 targetPos = targetBlock.transform.getTranslation(new Vector3());
@@ -98,10 +93,12 @@ public class BornInDecay extends ApplicationAdapter {
             highlightVisible = false;
         }
 
+        // Remove block
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT) && targetBlock != null) {
             cubes.remove(targetBlock);
         }
 
+        // Place block
         if (Gdx.input.isButtonJustPressed(Input.Buttons.RIGHT) && targetBlock != null) {
             Vector3 placePos = RaycastUtil.getPlacementPosition(targetBlock, camera);
             placePos.set(
@@ -127,22 +124,19 @@ public class BornInDecay extends ApplicationAdapter {
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
 
         modelBatch.begin(camera);
-
         if (highlightVisible) {
             modelBatch.render(highlightInstance, environment);
         }
-
         for (ModelInstance cube : cubes) {
             modelBatch.render(cube, environment);
         }
-
         modelBatch.end();
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-        shapeRenderer.setColor(1f, 1f, 1f, 1f); // white
-        float radius = 3f;
-        shapeRenderer.circle(Gdx.graphics.getWidth() / 2f, Gdx.graphics.getHeight() / 2f, radius);
-        shapeRenderer.end();
 
+        // Draw cursor
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+        shapeRenderer.setColor(1f, 1f, 1f, 1f);
+        shapeRenderer.circle(Gdx.graphics.getWidth() / 2f, Gdx.graphics.getHeight() / 2f, 3f);
+        shapeRenderer.end();
     }
 
     @Override
