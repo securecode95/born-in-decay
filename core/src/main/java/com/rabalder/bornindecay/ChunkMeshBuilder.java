@@ -84,19 +84,96 @@ public class ChunkMeshBuilder {
      * Greedy‑mesh the six directions (+X,‑X; +Y,‑Y; +Z,‑Z).
      */
     public ModelInstance buildChunkMesh(Chunk chunk) {
-        // reset
+        // 1) Reset our buffers
         vertices.clear();
         indices.clear();
         index = 0;
 
-        // … run your greedy‑mesh loops here to fill vertices+indices …
+        // 2) A reusable 2D mask for each slice
+        byte[][] mask = new byte[Chunk.SIZE][Chunk.SIZE];
 
-        // bake & return the instance
-        System.out.println("[ChunkMeshBuilder] generated verts: " + vertices.size() +
-            ", inds: " + indices.size());
-        ChunkMesh cm = build();
-        return cm.getModelInstance();
+        // ---- X‑axis faces (+X = EAST, -X = WEST) ----
+        for (int x = 0; x < Chunk.SIZE; x++) {
+            // +X (EAST)
+            for (int y = 0; y < Chunk.SIZE; y++) {
+                for (int z = 0; z < Chunk.SIZE; z++) {
+                    byte cur  = chunk.blocks[x][y][z];
+                    byte next = (x+1 < Chunk.SIZE ? chunk.blocks[x+1][y][z] : Chunk.AIR);
+                    mask[y][z] = (cur != Chunk.AIR && next == Chunk.AIR) ? cur : 0;
+                }
+            }
+            mergeMaskX(mask, x, Direction.EAST);
+
+            // -X (WEST)
+            for (int y = 0; y < Chunk.SIZE; y++) {
+                for (int z = 0; z < Chunk.SIZE; z++) {
+                    byte cur  = chunk.blocks[x][y][z];
+                    byte prev = (x-1 >= 0      ? chunk.blocks[x-1][y][z] : Chunk.AIR);
+                    mask[y][z] = (cur != Chunk.AIR && prev == Chunk.AIR) ? cur : 0;
+                }
+            }
+            mergeMaskX(mask, x, Direction.WEST);
+        }
+
+        // ---- Y‑axis faces (+Y = UP, -Y = DOWN) ----
+        for (int y = 0; y < Chunk.SIZE; y++) {
+            // +Y (UP)
+            for (int x = 0; x < Chunk.SIZE; x++) {
+                for (int z = 0; z < Chunk.SIZE; z++) {
+                    byte cur  = chunk.blocks[x][y][z];
+                    byte next = (y+1 < Chunk.SIZE ? chunk.blocks[x][y+1][z] : Chunk.AIR);
+                    mask[x][z] = (cur != Chunk.AIR && next == Chunk.AIR) ? cur : 0;
+                }
+            }
+            mergeMaskY(mask, y, Direction.UP);
+
+            // -Y (DOWN)
+            for (int x = 0; x < Chunk.SIZE; x++) {
+                for (int z = 0; z < Chunk.SIZE; z++) {
+                    byte cur  = chunk.blocks[x][y][z];
+                    byte prev = (y-1 >= 0      ? chunk.blocks[x][y-1][z] : Chunk.AIR);
+                    mask[x][z] = (cur != Chunk.AIR && prev == Chunk.AIR) ? cur : 0;
+                }
+            }
+            mergeMaskY(mask, y, Direction.DOWN);
+        }
+
+        // ---- Z‑axis faces (+Z = SOUTH, -Z = NORTH) ----
+        for (int z = 0; z < Chunk.SIZE; z++) {
+            // +Z (SOUTH)
+            for (int x = 0; x < Chunk.SIZE; x++) {
+                for (int y = 0; y < Chunk.SIZE; y++) {
+                    byte cur  = chunk.blocks[x][y][z];
+                    byte next = (z+1 < Chunk.SIZE ? chunk.blocks[x][y][z+1] : Chunk.AIR);
+                    mask[x][y] = (cur != Chunk.AIR && next == Chunk.AIR) ? cur : 0;
+                }
+            }
+            mergeMaskZ(mask, z, Direction.SOUTH);
+
+            // -Z (NORTH)
+            for (int x = 0; x < Chunk.SIZE; x++) {
+                for (int y = 0; y < Chunk.SIZE; y++) {
+                    byte cur  = chunk.blocks[x][y][z];
+                    byte prev = (z-1 >= 0      ? chunk.blocks[x][y][z-1] : Chunk.AIR);
+                    mask[x][y] = (cur != Chunk.AIR && prev == Chunk.AIR) ? cur : 0;
+                }
+            }
+            mergeMaskZ(mask, z, Direction.NORTH);
+        }
+
+        // 3) Build the low‑level Mesh and bake into a ModelInstance
+        ChunkMesh chunkMesh = build();          // build() now returns your greedy‑meshed ChunkMesh
+        Mesh mesh           = chunkMesh.mesh;   // extract the Mesh
+        Material mat        = new Material(ColorAttribute.createDiffuse(Color.WHITE));
+
+        ModelBuilder mb = new ModelBuilder();
+        mb.begin();
+        mb.part("chunk", mesh, GL20.GL_TRIANGLES, mat);
+        Model model = mb.end();
+
+        return new ModelInstance(model);
     }
+
 
     // ---- Helper: merge a mask on an X‑slice at fixed x ----
     private void mergeMaskX(byte[][] mask, int x, Direction dir) {

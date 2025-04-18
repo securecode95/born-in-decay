@@ -33,27 +33,34 @@ public class WorldGenerator {
                 requiredChunks.add(chunkCoord);
 
                 if (!activeChunks.containsKey(chunkCoord)) {
+                    // 1) Generate and store the raw chunk
                     Chunk newChunk = generateChunk(chunkX, chunkZ);
                     activeChunks.put(chunkCoord, newChunk);
 
-                    // Apply greedy meshing to the chunk and generate a ModelInstance
+                    // 2) Build its greedy‐meshed ModelInstance
                     ChunkMeshBuilder builder = new ChunkMeshBuilder();
-                    ModelInstance mesh = builder.buildChunkMesh(newChunk); // mesh generated via greedy meshing
+                    ModelInstance mesh = builder.buildChunkMesh(newChunk);
+
+                    // 3) Keep a map of meshes if you still need getVisibleChunks()
                     chunkMeshes.put(chunkCoord, mesh);
+
+                    // 4) **HOOK** the mesh back onto the chunk itself:
+                    newChunk.meshInstance = mesh;
                 }
             }
         }
 
-        // Unload out-of-range chunks
-        Iterator<Vector2> iterator = activeChunks.keySet().iterator();
-        while (iterator.hasNext()) {
-            Vector2 key = iterator.next();
-            if (!requiredChunks.contains(key)) {
-                activeChunks.remove(key);
-                chunkMeshes.remove(key);
+        // Unload chunks that moved out of view
+        Iterator<Vector2> it = activeChunks.keySet().iterator();
+        while (it.hasNext()) {
+            Vector2 coord = it.next();
+            if (!requiredChunks.contains(coord)) {
+                activeChunks.remove(coord);
+                chunkMeshes.remove(coord);
             }
         }
     }
+
 
     private Chunk generateChunk(int chunkX, int chunkZ) {
         Chunk chunk = new Chunk();

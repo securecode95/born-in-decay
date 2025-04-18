@@ -21,12 +21,7 @@ public class WorldManager {
 
     // ✅ Returns all visible chunk meshes (used for rendering)
     public List<ModelInstance> getChunkMeshes() {
-        List<ModelInstance> meshes = new ArrayList<>();
-        for (Chunk chunk : generator.getActiveChunks()) {
-            if (chunk.meshInstance != null) {
-                meshes.add(chunk.meshInstance);  // Add the mesh of each chunk to the list
-            }
-        }
-        return meshes;  // Return the list of chunk meshes
+        return generator.getVisibleChunks();
     }
+
 }
