@@ -16,7 +16,7 @@ public class PlayerController {
     private float pitch = 0f;
     private float moveSpeed = 8f;
     private float gravity = -18f;
-    private float jumpSpeed = 11f;
+    private float jumpSpeed = 8.5f;
     private boolean onGround = false;
 
     private final float mouseSensitivity = 0.2f;
@@ -90,12 +90,13 @@ public class PlayerController {
             if (
                 below.x > bp.x - 0.5f && below.x < bp.x + 0.5f &&
                     below.z > bp.z - 0.5f && below.z < bp.z + 0.5f &&
-                    Math.abs(below.y - (bp.y + 0.5f)) <= 0.1f
+                    Math.abs(below.y - (bp.y + 1.0f)) <= 0.1f
             ) {
                 onGround = true;
                 break;
             }
         }
+
 
 
         // Jump logic (after confirming grounded)

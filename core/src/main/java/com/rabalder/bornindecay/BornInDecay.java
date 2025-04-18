@@ -84,14 +84,15 @@ public class BornInDecay extends ApplicationAdapter {
         if (targetBlock != null) {
             Vector3 targetPos = targetBlock.transform.getTranslation(new Vector3());
             highlightInstance.transform.setToTranslation(
-                Math.round(targetPos.x - 0.5f) + 0.5f,
-                Math.round(targetPos.y - 0.5f) + 0.5f,
-                Math.round(targetPos.z - 0.5f) + 0.5f
+                targetPos.x,
+                targetPos.y,
+                targetPos.z
             );
             highlightVisible = true;
         } else {
             highlightVisible = false;
         }
+
 
         // Remove block
         if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT) && targetBlock != null) {
@@ -102,9 +103,9 @@ public class BornInDecay extends ApplicationAdapter {
         if (Gdx.input.isButtonJustPressed(Input.Buttons.RIGHT) && targetBlock != null) {
             Vector3 placePos = RaycastUtil.getPlacementPosition(targetBlock, camera);
             placePos.set(
-                (float) Math.floor(placePos.x) + 0.5f,
-                (float) Math.floor(placePos.y) + 0.5f,
-                (float) Math.floor(placePos.z) + 0.5f
+                Math.round(placePos.x),
+                Math.round(placePos.y),
+                Math.round(placePos.z)
             );
 
             ModelInstance newBlock = new ModelInstance(Materials.GRASSY_BLOCK_MODEL);
