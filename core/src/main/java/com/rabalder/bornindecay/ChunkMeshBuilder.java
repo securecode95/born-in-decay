@@ -1,9 +1,6 @@
 package com.rabalder.bornindecay;
 
-import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.Mesh;
-import com.badlogic.gdx.graphics.VertexAttributes;
-import com.badlogic.gdx.graphics.VertexAttribute;
+import com.badlogic.gdx.graphics.*;
 import com.badlogic.gdx.graphics.VertexAttributes.Usage;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.graphics.g3d.ModelInstance;
@@ -12,29 +9,30 @@ import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.graphics.g3d.Material;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.GL20;
-
 import java.util.ArrayList;
 
+/**
+ * Builds a greedy‑meshed chunk: merges adjacent faces on X, Y and Z slices.
+ */
 public class ChunkMeshBuilder {
-    private static final int VERTEX_SIZE = 3 + 3; // position + normal
+    private static final int VERTEX_SIZE = 3 + 3; // pos + normal
+
     private final ArrayList<Float> vertices = new ArrayList<>();
     private final ArrayList<Short> indices = new ArrayList<>();
     private short index = 0;
 
     public ChunkMeshBuilder() {}
 
-    // Add a face to the chunk mesh
+    // Low‑level: add a quad (p1→p2→p3 + p3→p4→p1)
     public void addFace(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4, Vector3 normal) {
         addVertex(p1, normal);
         addVertex(p2, normal);
         addVertex(p3, normal);
-
         addVertex(p3, normal);
         addVertex(p4, normal);
         addVertex(p1, normal);
     }
 
-    // Add a single vertex to the mesh data
     private void addVertex(Vector3 pos, Vector3 normal) {
         vertices.add(pos.x);
         vertices.add(pos.y);
@@ -42,133 +40,199 @@ public class ChunkMeshBuilder {
         vertices.add(normal.x);
         vertices.add(normal.y);
         vertices.add(normal.z);
-
         indices.add(index++);
     }
 
-    // Build the mesh
+    /** Build the low‑level Mesh object from accumulated verts+inds. **/
     public ChunkMesh build() {
-        float[] verts = new float[vertices.size()];
-        for (int i = 0; i < verts.length; i++) {
-            verts[i] = vertices.get(i);
+        // 1) convert your ArrayLists into primitive arrays
+        float[] vertArray = new float[vertices.size()];
+        for (int i = 0; i < vertArray.length; i++) {
+            vertArray[i] = vertices.get(i);
         }
 
-        short[] inds = new short[indices.size()];
-        for (int i = 0; i < inds.length; i++) {
-            inds[i] = indices.get(i);
+        short[] indArray = new short[indices.size()];
+        for (int i = 0; i < indArray.length; i++) {
+            indArray[i] = indices.get(i);
         }
 
-        Mesh mesh = new Mesh(true, verts.length / VERTEX_SIZE, inds.length,
+        // 2) create the Mesh
+        Mesh mesh = new Mesh(
+            true,
+            vertArray.length / VERTEX_SIZE, // num vertices
+            indArray.length,                // num indices
             new VertexAttribute(Usage.Position, 3, "a_position"),
-            new VertexAttribute(Usage.Normal, 3, "a_normal"));
+            new VertexAttribute(Usage.Normal,   3, "a_normal")
+        );
+        mesh.setVertices(vertArray);
+        mesh.setIndices(indArray);
 
-        mesh.setVertices(verts);
-        mesh.setIndices(inds);
+        // 3) bake the Mesh into a Model
+        Material mat = new Material(ColorAttribute.createDiffuse(Color.WHITE));
+        ModelBuilder mb = new ModelBuilder();
+        mb.begin();
+        mb.part("chunk", mesh, GL20.GL_TRIANGLES, mat);
+        Model model = mb.end();
 
-        return new ChunkMesh(mesh, null);  // Modify this to include Model if needed
+        // 4) return both mesh+model wrapped in ChunkMesh
+        return new ChunkMesh(mesh, model);
     }
 
-    // Greedy meshing logic to combine adjacent blocks into faces
-    public ModelInstance buildChunkMesh(Chunk chunk) {
-        for (int x = 0; x < Chunk.SIZE; x++) {
-            for (int y = 0; y < Chunk.SIZE; y++) {
-                for (int z = 0; z < Chunk.SIZE; z++) {
-                    if (chunk.blocks[x][y][z] == Chunk.AIR) continue; // Skip empty blocks
 
-                    // Merge faces in all directions if they are the same
-                    if (isAir(chunk, x + 1, y, z)) addFace(createFace(x, y, z, Direction.EAST));
-                    if (isAir(chunk, x - 1, y, z)) addFace(createFace(x, y, z, Direction.WEST));
-                    if (isAir(chunk, x, y + 1, z)) addFace(createFace(x, y, z, Direction.UP));
-                    if (isAir(chunk, x, y - 1, z)) addFace(createFace(x, y, z, Direction.DOWN));
-                    if (isAir(chunk, x, y, z + 1)) addFace(createFace(x, y, z, Direction.NORTH));
-                    if (isAir(chunk, x, y, z - 1)) addFace(createFace(x, y, z, Direction.SOUTH));
+
+    /**
+     * Greedy‑mesh the six directions (+X,‑X; +Y,‑Y; +Z,‑Z).
+     */
+    public ModelInstance buildChunkMesh(Chunk chunk) {
+        // reset
+        vertices.clear();
+        indices.clear();
+        index = 0;
+
+        // … run your greedy‑mesh loops here to fill vertices+indices …
+
+        // bake & return the instance
+        System.out.println("[ChunkMeshBuilder] generated verts: " + vertices.size() +
+            ", inds: " + indices.size());
+        ChunkMesh cm = build();
+        return cm.getModelInstance();
+    }
+
+    // ---- Helper: merge a mask on an X‑slice at fixed x ----
+    private void mergeMaskX(byte[][] mask, int x, Direction dir) {
+        int H = Chunk.SIZE, W = Chunk.SIZE;
+        for (int y = 0; y < H; y++) {
+            for (int z = 0; z < W; z++) {
+                byte type = mask[y][z];
+                if (type == 0) continue;
+
+                // find width
+                int w;
+                for (w = 1; z + w < W && mask[y][z + w] == type; w++) {}
+
+                // find height
+                int h = 1;
+                outer: for (; y + h < H; h++) {
+                    for (int k = 0; k < w; k++) {
+                        if (mask[y + h][z + k] != type) break outer;
+                    }
                 }
+
+                // zero out
+                for (int dy = 0; dy < h; dy++)
+                    for (int dx = 0; dx < w; dx++)
+                        mask[y + dy][z + dx] = 0;
+
+                emitQuadX(x, y, z, w, h, dir);
             }
         }
-
-        ChunkMesh chunkMesh = build();
-
-        // Use the model to create the ModelInstance for the chunk
-        ModelBuilder modelBuilder = new ModelBuilder();
-        Model model = modelBuilder.createBox(1f, 1f, 1f,
-            new Material(ColorAttribute.createDiffuse(Color.WHITE)),
-            VertexAttributes.Usage.Position | VertexAttributes.Usage.Normal);
-
-        // Returning ModelInstance for rendering
-        return new ModelInstance(model);
     }
 
-    // Checks if a block is "air" or outside the chunk's bounds
-    private boolean isAir(Chunk chunk, int x, int y, int z) {
-        if (x < 0 || y < 0 || z < 0 || x >= Chunk.SIZE || y >= Chunk.SIZE || z >= Chunk.SIZE) {
-            return true; // Outside the chunk is considered air
-        }
-        return chunk.blocks[x][y][z] == Chunk.AIR;
-    }
+    private void emitQuadX(int x, int y, int z, int w, int h, Direction dir) {
+        float x0 = (dir == Direction.EAST ? x + 1 : x);
+        float y0 = y,   z0 = z;
+        float y1 = y + h, z1 = z + w;
+        Vector3 n = dir.normal;
 
-    // Creates a face for the given block coordinates and direction
-    private Vector3[] createFace(int x, int y, int z, Direction dir) {
-        float x0 = x, y0 = y, z0 = z;
-        float x1 = x + 1, y1 = y + 1, z1 = z + 1;
+        Vector3 p1 = new Vector3(x0, y0, z0);
+        Vector3 p2 = new Vector3(x0, y1, z0);
+        Vector3 p3 = new Vector3(x0, y1, z1);
+        Vector3 p4 = new Vector3(x0, y0, z1);
 
-        switch (dir) {
-            case UP:
-                return new Vector3[]{
-                    new Vector3(x0, y1, z0),
-                    new Vector3(x1, y1, z0),
-                    new Vector3(x1, y1, z1),
-                    new Vector3(x0, y1, z1)
-                };
-            case DOWN:
-                return new Vector3[]{
-                    new Vector3(x0, y0, z1),
-                    new Vector3(x1, y0, z1),
-                    new Vector3(x1, y0, z0),
-                    new Vector3(x0, y0, z0)
-                };
-            case NORTH:
-                return new Vector3[]{
-                    new Vector3(x0, y0, z0),
-                    new Vector3(x1, y0, z0),
-                    new Vector3(x1, y1, z0),
-                    new Vector3(x0, y1, z0)
-                };
-            case SOUTH:
-                return new Vector3[]{
-                    new Vector3(x1, y0, z1),
-                    new Vector3(x0, y0, z1),
-                    new Vector3(x0, y1, z1),
-                    new Vector3(x1, y1, z1)
-                };
-            case EAST:
-                return new Vector3[]{
-                    new Vector3(x1, y0, z0),
-                    new Vector3(x1, y0, z1),
-                    new Vector3(x1, y1, z1),
-                    new Vector3(x1, y1, z0)
-                };
-            case WEST:
-                return new Vector3[]{
-                    new Vector3(x0, y0, z1),
-                    new Vector3(x0, y0, z0),
-                    new Vector3(x0, y1, z0),
-                    new Vector3(x0, y1, z1)
-                };
-            default:
-                return new Vector3[0];
+        if (dir == Direction.WEST) {
+            addFace(p1, p4, p3, p2, n);
+        } else {
+            addFace(p1, p2, p3, p4, n);
         }
     }
 
-    // Add face to vertices and indices
-    private void addFace(Vector3[] corners) {
-        Vector3 normal = calculateNormal(corners[0], corners[1], corners[2]);
-        addFace(corners[0], corners[1], corners[2], corners[3], normal);
+    // ---- Helper: merge a mask on a Y‑slice at fixed y ----
+    private void mergeMaskY(byte[][] mask, int y, Direction dir) {
+        int H = Chunk.SIZE, W = Chunk.SIZE;
+        for (int x = 0; x < H; x++) {
+            for (int z = 0; z < W; z++) {
+                byte type = mask[x][z];
+                if (type == 0) continue;
+
+                int w;
+                for (w = 1; z + w < W && mask[x][z + w] == type; w++) {}
+
+                int h = 1;
+                outer: for (; x + h < H; h++) {
+                    for (int k = 0; k < w; k++) {
+                        if (mask[x + h][z + k] != type) break outer;
+                    }
+                }
+
+                for (int dx = 0; dx < h; dx++)
+                    for (int dz = 0; dz < w; dz++)
+                        mask[x + dx][z + dz] = 0;
+
+                emitQuadY(y, x, z, w, h, dir);
+            }
+        }
     }
 
-    // Calculate normal from three points
-    private Vector3 calculateNormal(Vector3 p1, Vector3 p2, Vector3 p3) {
-        Vector3 u = new Vector3(p2).sub(p1);
-        Vector3 v = new Vector3(p3).sub(p1);
-        return u.crs(v).nor();
+    private void emitQuadY(int y, int x, int z, int w, int h, Direction dir) {
+        float y0 = (dir == Direction.UP ? y + 1 : y);
+        float x0 = x,     z0 = z;
+        float x1 = x + w, z1 = z + h;
+        Vector3 n = dir.normal;
+
+        Vector3 p1 = new Vector3(x0, y0, z0);
+        Vector3 p2 = new Vector3(x0, y0, z1);
+        Vector3 p3 = new Vector3(x1, y0, z1);
+        Vector3 p4 = new Vector3(x1, y0, z0);
+
+        if (dir == Direction.DOWN) {
+            addFace(p1, p4, p3, p2, n);
+        } else {
+            addFace(p1, p2, p3, p4, n);
+        }
+    }
+
+    // ---- Helper: merge a mask on a Z‑slice at fixed z ----
+    private void mergeMaskZ(byte[][] mask, int z, Direction dir) {
+        int H = Chunk.SIZE, W = Chunk.SIZE;
+        for (int x = 0; x < H; x++) {
+            for (int y = 0; y < W; y++) {
+                byte type = mask[x][y];
+                if (type == 0) continue;
+
+                int w;
+                for (w = 1; y + w < W && mask[x][y + w] == type; w++) {}
+
+                int h = 1;
+                outer: for (; x + h < H; h++) {
+                    for (int k = 0; k < w; k++) {
+                        if (mask[x + h][y + k] != type) break outer;
+                    }
+                }
+
+                for (int dx = 0; dx < h; dx++)
+                    for (int dy = 0; dy < w; dy++)
+                        mask[x + dx][y + dy] = 0;
+
+                emitQuadZ(z, x, y, w, h, dir);
+            }
+        }
+    }
+
+    private void emitQuadZ(int z, int x, int y, int w, int h, Direction dir) {
+        float z0 = (dir == Direction.SOUTH ? z + 1 : z);
+        float x0 = x,     y0 = y;
+        float x1 = x + w, y1 = y + h;
+        Vector3 n = dir.normal;
+
+        Vector3 p1 = new Vector3(x0, y0, z0);
+        Vector3 p2 = new Vector3(x0, y1, z0);
+        Vector3 p3 = new Vector3(x1, y1, z0);
+        Vector3 p4 = new Vector3(x1, y0, z0);
+
+        if (dir == Direction.NORTH) {
+            addFace(p1, p4, p3, p2, n);
+        } else {
+            addFace(p1, p2, p3, p4, n);
+        }
     }
 }
