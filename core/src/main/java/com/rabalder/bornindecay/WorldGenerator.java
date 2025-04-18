@@ -7,20 +7,22 @@ import com.badlogic.gdx.math.Vector3;
 
 import java.util.*;
 
+
 public class WorldGenerator {
     private final Map<Vector2, Chunk> activeChunks = new HashMap<>();
-    private final Model blockModel;
+    private final Map<Vector2, ModelInstance> chunkMeshes = new HashMap<>();
+    private final Model grassModel;
+    private final Model soilModel;
     private final OpenSimplexNoise noise;
     private final long seed;
     private final int viewDistance = 2;
-    private final int maxTerrainHeight = 6;
+    private final int maxTerrainHeight = 8;
 
-    private final List<ModelInstance> visibleBlocks = new ArrayList<>();
-
-    public WorldGenerator(Model blockModel, long seed) {
-        this.blockModel = blockModel;
+    public WorldGenerator(Model grassModel, Model soilModel, long seed, long seed1) {
+        this.grassModel = grassModel;
+        this.soilModel = soilModel;
         this.seed = seed;
-        this.noise = new OpenSimplexNoise(); // ✅ No args
+        this.noise = new OpenSimplexNoise();
     }
 
     public void update(Vector3 playerPosition) {
@@ -39,69 +41,54 @@ public class WorldGenerator {
                 if (!activeChunks.containsKey(chunkCoord)) {
                     Chunk newChunk = generateChunk(chunkX, chunkZ);
                     activeChunks.put(chunkCoord, newChunk);
-                    addChunkBlocksToVisible(newChunk);
+
+                    // Mesh the chunk
+                    ChunkMeshBuilder builder = new ChunkMeshBuilder();
+                    ModelInstance mesh = builder.buildChunkMesh(newChunk);
+                    chunkMeshes.put(chunkCoord, mesh);
                 }
             }
         }
 
-        // Unload chunks outside view distance
-        Iterator<Map.Entry<Vector2, Chunk>> iterator = activeChunks.entrySet().iterator();
+        // Unload out-of-range chunks
+        Iterator<Vector2> iterator = activeChunks.keySet().iterator();
         while (iterator.hasNext()) {
-            Map.Entry<Vector2, Chunk> entry = iterator.next();
-            if (!requiredChunks.contains(entry.getKey())) {
-                removeChunkBlocksFromVisible(entry.getValue());
-                iterator.remove();
+            Vector2 key = iterator.next();
+            if (!requiredChunks.contains(key)) {
+                activeChunks.remove(key);
+                chunkMeshes.remove(key);
             }
         }
     }
 
     private Chunk generateChunk(int chunkX, int chunkZ) {
-        Chunk chunk = new Chunk(blockModel, chunkX * Chunk.SIZE, 0, chunkZ * Chunk.SIZE);
+        Chunk chunk = new Chunk();
+
         for (int x = 0; x < Chunk.SIZE; x++) {
             for (int z = 0; z < Chunk.SIZE; z++) {
                 int worldX = chunkX * Chunk.SIZE + x;
                 int worldZ = chunkZ * Chunk.SIZE + z;
 
-                float heightNoise = OpenSimplexNoise.noise2(seed, worldX * 0.1, worldZ * 0.1);
+                double heightNoise = OpenSimplexNoise.noise2(seed, worldX * 0.1, worldZ * 0.1);
                 int height = (int) (heightNoise * maxTerrainHeight + maxTerrainHeight / 2f);
+                height = Math.min(height, Chunk.SIZE - 1); // Prevent going out of bounds
 
                 for (int y = 0; y <= height; y++) {
-                    ModelInstance block = new ModelInstance(blockModel);
-                    block.transform.setToTranslation(worldX, y, worldZ);
-                    chunk.blocks[x][y][z] = block;
+                    byte type = (y == height) ? Chunk.GRASS : Chunk.SOIL;
+                    chunk.setBlock(x, y, z, type);
                 }
             }
         }
+
         return chunk;
     }
 
-    private void addChunkBlocksToVisible(Chunk chunk) {
-        for (int x = 0; x < Chunk.SIZE; x++) {
-            for (int y = 0; y < Chunk.SIZE; y++) {
-                for (int z = 0; z < Chunk.SIZE; z++) {
-                    ModelInstance block = chunk.blocks[x][y][z];
-                    if (block != null) {
-                        visibleBlocks.add(block);
-                    }
-                }
-            }
-        }
-    }
-
-    private void removeChunkBlocksFromVisible(Chunk chunk) {
-        for (int x = 0; x < Chunk.SIZE; x++) {
-            for (int y = 0; y < Chunk.SIZE; y++) {
-                for (int z = 0; z < Chunk.SIZE; z++) {
-                    ModelInstance block = chunk.blocks[x][y][z];
-                    if (block != null) {
-                        visibleBlocks.remove(block);
-                    }
-                }
-            }
-        }
-    }
-
     public List<ModelInstance> getVisibleBlocks() {
-        return visibleBlocks;
+        return new ArrayList<>(chunkMeshes.values());
     }
+
+    public Collection<Chunk> getActiveChunks() {
+        return activeChunks.values();
+    }
+
 }
