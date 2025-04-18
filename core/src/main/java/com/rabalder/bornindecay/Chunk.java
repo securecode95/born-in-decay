@@ -17,9 +17,9 @@ public class Chunk {
                         BlockType type = (x + z) % 2 == 0 ? BlockType.GRASS : BlockType.DECAYED_SOIL;
                         ModelInstance instance = new ModelInstance(type.model);
                         instance.transform.setToTranslation(
-                            x + offsetX + 0.5f,
-                            y + offsetY + 0.5f,
-                            z + offsetZ + 0.5f
+                            x + offsetX,   // removed + 0.5f
+                            y + offsetY,   // removed + 0.5f
+                            z + offsetZ    // removed + 0.5f
                         );
                         blocks[x][y][z] = instance;
                     }

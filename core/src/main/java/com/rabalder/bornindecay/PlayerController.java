@@ -9,7 +9,7 @@ import com.badlogic.gdx.math.Vector3;
 import java.util.ArrayList;
 
 public class PlayerController {
-    public Vector3 position = new Vector3(8, 2.5f, 8); // center of chunk 0,0
+    public Vector3 position = new Vector3(8f, 2.5f, 8f);
     public Vector3 velocity = new Vector3();
 
     private float yaw = -90f;
@@ -47,17 +47,21 @@ public class PlayerController {
         if (Gdx.input.isKeyPressed(Input.Keys.A)) move.sub(right);
         if (Gdx.input.isKeyPressed(Input.Keys.D)) move.add(right);
 
+        if (Gdx.input.isKeyJustPressed(Input.Keys.SPACE)) {
+            System.out.println("Spacebar pressed");
+        }
+
         move.nor().scl(moveSpeed);
         velocity.x = move.x;
         velocity.z = move.z;
 
-        // Gravity
+        // Apply gravity
         velocity.y += gravity * delta;
 
-        // Predict movement
+        // Predict next position
         Vector3 nextPos = new Vector3(position).mulAdd(velocity, delta);
 
-        // Collision and position update
+        // Attempt to move to next position
         if (!isColliding(nextPos, blocks)) {
             position.set(nextPos);
         } else {
@@ -77,36 +81,27 @@ public class PlayerController {
             }
         }
 
-        // Check grounded status after position update
+// Ground detection after movement is resolved
         onGround = false;
-        Vector3 foot = new Vector3(position.x, position.y - 0.1f, position.z);
-
-        System.out.printf("👣 Player foot at: %.2f, %.2f, %.2f\n", foot.x, foot.y, foot.z);
+        Vector3 below = new Vector3(position.x, position.y - 0.1f, position.z);
 
         for (ModelInstance block : blocks) {
             Vector3 bp = block.transform.getTranslation(new Vector3());
-
-            float dx = Math.abs(foot.x - bp.x);
-            float dz = Math.abs(foot.z - bp.z);
-            float dy = Math.abs(foot.y - (bp.y + 0.5f));
-
-            // Show every check
-            System.out.printf("⬛ Block at %.2f, %.2f, %.2f | dx=%.3f dy=%.3f dz=%.3f\n", bp.x, bp.y, bp.z, dx, dy, dz);
-
-            if (dx <= 0.5f && dz <= 0.5f && dy <= 0.15f) {
-                System.out.println("✅ Standing on this block!");
+            if (
+                below.x > bp.x - 0.5f && below.x < bp.x + 0.5f &&
+                    below.z > bp.z - 0.5f && below.z < bp.z + 0.5f &&
+                    Math.abs(below.y - (bp.y + 0.5f)) <= 0.1f
+            ) {
                 onGround = true;
                 break;
             }
         }
 
-        // Jump
+
+        // Jump logic (after confirming grounded)
         if (onGround && Gdx.input.isKeyJustPressed(Input.Keys.SPACE)) {
-            System.out.println("✅ Jump initiated - Player was onGround");
             velocity.y = jumpSpeed;
             onGround = false;
-        } else if (!onGround && Gdx.input.isKeyJustPressed(Input.Keys.SPACE)) {
-            System.out.println("⛔ Cannot jump - Player not onGround");
         }
     }
 
