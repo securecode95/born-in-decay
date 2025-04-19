@@ -61,52 +61,46 @@ public class ChunkMeshBuilder {
         soilIdx.clear();
         grassIndex = soilIndex = 0;
 
-        // 1) X-axis masks
-// 1) X‑axis faces: two masks per slice
+        // 1) X‑axis faces: expose only +X and –X boundaries
         for (int x = 0; x <= SIZE; x++) {
-            // +X faces at x: blocks at [x][y][z] that have an empty neighbor at x-1
             byte[][] maskPX = new byte[SIZE][SIZE];
-            // –X faces at x: blocks at [x-1][y][z] that have an empty neighbor at x
             byte[][] maskNX = new byte[SIZE][SIZE];
-
             for (int y = 0; y < SIZE; y++) {
                 for (int z = 0; z < SIZE; z++) {
-                    boolean in = chunk.inBounds(x, y, z) && chunk.getBlock(x, y, z) != 0;
-                    boolean inPrev = chunk.inBounds(x-1, y, z) && chunk.getBlock(x-1, y, z) != 0;
-
-                    // if there’s a block at x but not at x-1, we expose +X
-                    if (in && !inPrev) maskPX[y][z] = chunk.getBlock(x, y, z);
-
-                    // if there’s a block at x-1 but not at x, we expose –X
-                    if (inPrev && !in) maskNX[y][z] = chunk.getBlock(x-1, y, z);
+                    boolean here = x < SIZE && chunk.getBlock(x,y,z) != 0;
+                    boolean prev = x-1 >= 0    && chunk.getBlock(x-1,y,z) != 0;
+                    if (here && !prev) maskPX[y][z] = chunk.getBlock(x,y,z);
+                    if (prev && !here) maskNX[y][z] = chunk.getBlock(x-1,y,z);
                 }
             }
-
-            // now merge each mask with the correct normal
             mergeMaskX(maskPX, x, new Vector3(+1,0,0), false);
             mergeMaskX(maskNX, x, new Vector3(-1,0,0), false);
         }
+
+        // 2) Y‑axis faces: +Y gets grass, –Y gets soil
         for (int y = 0; y <= SIZE; y++) {
-            byte[][] maskPY = new byte[SIZE][SIZE], maskNY = new byte[SIZE][SIZE];
+            byte[][] maskPY = new byte[SIZE][SIZE];
+            byte[][] maskNY = new byte[SIZE][SIZE];
             for (int x = 0; x < SIZE; x++) {
                 for (int z = 0; z < SIZE; z++) {
-                    boolean here     = chunk.inBounds(x, y, z)     && chunk.getBlock(x,y,z)     != 0;
-                    boolean below    = chunk.inBounds(x, y-1, z) && chunk.getBlock(x,y-1,z) != 0;
-                    // +Y face if block here but none below
+                    boolean here  = y < SIZE    && chunk.getBlock(x,y,z) != 0;
+                    boolean below = y-1 >= 0    && chunk.getBlock(x,y-1,z) != 0;
                     if (here && !below) maskPY[x][z] = chunk.getBlock(x,y,z);
-                    // –Y if block below but none here
                     if (below && !here) maskNY[x][z] = chunk.getBlock(x,y-1,z);
                 }
             }
-            mergeMaskY(maskPY, y, new Vector3(0,+1,0), true);   // grass‐tops only on +Y
+            mergeMaskY(maskPY, y, new Vector3(0,+1,0), true);
             mergeMaskY(maskNY, y, new Vector3(0,-1,0), false);
         }
+
+        // 3) Z‑axis faces: expose +Z and –Z boundaries
         for (int z = 0; z <= SIZE; z++) {
-            byte[][] maskPZ = new byte[SIZE][SIZE], maskNZ = new byte[SIZE][SIZE];
+            byte[][] maskPZ = new byte[SIZE][SIZE];
+            byte[][] maskNZ = new byte[SIZE][SIZE];
             for (int x = 0; x < SIZE; x++) {
                 for (int y = 0; y < SIZE; y++) {
-                    boolean here  = chunk.inBounds(x, y, z)     && chunk.getBlock(x,y,z)     != 0;
-                    boolean front = chunk.inBounds(x, y, z-1) && chunk.getBlock(x,y,z-1) != 0;
+                    boolean here  = z < SIZE    && chunk.getBlock(x,y,z) != 0;
+                    boolean front = z-1 >= 0    && chunk.getBlock(x,y,z-1) != 0;
                     if (here && !front) maskPZ[x][y] = chunk.getBlock(x,y,z);
                     if (front && !here) maskNZ[x][y] = chunk.getBlock(x,y,z-1);
                 }
@@ -114,7 +108,6 @@ public class ChunkMeshBuilder {
             mergeMaskZ(maskPZ, z, new Vector3(0,0,+1), false);
             mergeMaskZ(maskNZ, z, new Vector3(0,0,-1), false);
         }
-
 
         // 4) build grass mesh
         Mesh grassMesh = new Mesh(true,
@@ -136,20 +129,19 @@ public class ChunkMeshBuilder {
         soilMesh.setVertices(toFloatArray(soilVerts));
         soilMesh.setIndices(toShortArray(soilIdx));
 
-// 6) create Material instances (bundle your attributes)
+        // 6) create materials
         Material grassMat = new Material(
             ColorAttribute.createDiffuse(Color.GREEN),
-            ColorAttribute.createSpecular(0.2f, 0.2f, 0.2f, 1f),
+            ColorAttribute.createSpecular(0.2f,0.2f,0.2f,1f),
             IntAttribute.createCullFace(GL20.GL_NONE)
         );
-
         Material soilMat = new Material(
-            ColorAttribute.createDiffuse(new Color(0.6f, 0.4f, 0.2f, 1f)),
-            ColorAttribute.createSpecular(0.1f, 0.1f, 0.1f, 1f),
+            ColorAttribute.createDiffuse(new Color(0.6f,0.4f,0.2f,1f)),
+            ColorAttribute.createSpecular(0.1f,0.1f,0.1f,1f),
             IntAttribute.createCullFace(GL20.GL_NONE)
         );
 
-// 7) bake into one Model with two parts
+        // 7) bake into one Model with two parts
         ModelBuilder mb = new ModelBuilder();
         mb.begin();
         mb.part("grass", grassMesh, GL20.GL_TRIANGLES, grassMat);
