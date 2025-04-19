@@ -37,8 +37,7 @@ public class BornInDecay extends ApplicationAdapter {
         sr    = new ShapeRenderer();
         sb    = new SpriteBatch();
         font  = new BitmapFont();
-
-        wm     = new WorldManager();
+        wm = new WorldManager(System.currentTimeMillis());
         player = new PlayerController();
 
         // spawn high then drop
@@ -55,10 +54,9 @@ public class BornInDecay extends ApplicationAdapter {
         Gdx.gl.glEnable (GL20.GL_DEPTH_TEST);
 
         wm.update(player.position);
-        List<ModelInstance> chunks = wm.getChunkMeshes();
-        List<Vector3> voxels       = wm.getCollisionVoxels();
-
-        player.update(camera, dt, voxels);
+        List<ModelInstance> visibleChunks   = wm.getChunkMeshes();
+        List<Vector3>       collisionVoxels = wm.getCollisionVoxels();
+        player.update(camera, deltaTime, collisionVoxels);
 
         Gdx.gl.glViewport(0,0,Gdx.graphics.getWidth(),Gdx.graphics.getHeight());
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT|GL20.GL_DEPTH_BUFFER_BIT);

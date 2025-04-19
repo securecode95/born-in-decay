@@ -16,7 +16,7 @@ public class WorldGenerator {
     /**
      * Ensure all chunks within `radius` of the player (px,pz) are generated.
      */
-    public void update(float px, float pz, int radius) {
+    public void update(int cx, int cz, int radius) {
         // which chunk the player is in
         int cx = (int)Math.floor(px / Chunk.SIZE);
         int cz = (int)Math.floor(pz / Chunk.SIZE);
