@@ -46,7 +46,7 @@ public class WorldGenerator {
                 int h=(int)(n*maxH+maxH/2f);
                 h=Math.max(0,Math.min(h,Chunk.SIZE-1));
                 for(int y=0;y<=h;y++){
-                    byte t = (y==h?BlockType.GRASS:(y<2?BlockType.STONE:BlockType.SOIL));
+                    byte t = (y==h?BlockType.GRASS:(y<2?BlockType.STONE:BlockType.DIRT));
                     c.setBlock(x,y,z,t);
                 }
             }
@@ -56,7 +56,7 @@ public class WorldGenerator {
     public List<ModelInstance> getVisibleChunks() {
         return new ArrayList<>(meshes.values());
     }
-
+    
     public List<Vector3> getCollisionVoxels() {
         List<Vector3> vox=new ArrayList<>();
         for (var e:chunks.entrySet()) {

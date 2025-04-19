@@ -5,9 +5,9 @@ import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.Mesh;
 import com.badlogic.gdx.graphics.VertexAttribute;
 import com.badlogic.gdx.graphics.VertexAttributes.Usage;
-import com.badlogic.gdx.graphics.g3d.Material;
 import com.badlogic.gdx.graphics.g3d.Model;
 import com.badlogic.gdx.graphics.g3d.ModelInstance;
+import com.badlogic.gdx.graphics.g3d.Material;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.attributes.IntAttribute;
 import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
@@ -17,229 +17,201 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Greedy‐meshes a Chunk into three merged meshes: grass, dirt, stone.
+ * Builds a greedy‐meshed chunk with separate meshes for grass, dirt and stone.
  */
 public class ChunkMeshBuilder {
-    private static final int SIZE        = Chunk.SIZE;
+    private static final int SIZE = Chunk.SIZE;
     private static final int VERTEX_SIZE = 6; // x,y,z + nx,ny,nz
 
-    // per‐type buffers
-    private final List<Float> grassV = new ArrayList<>(); private final List<Short> grassI = new ArrayList<>(); private short gBase=0;
-    private final List<Float> dirtV  = new ArrayList<>(); private final List<Short> dirtI  = new ArrayList<>(); private short dBase=0;
-    private final List<Float> stoneV = new ArrayList<>(); private final List<Short> stoneI = new ArrayList<>(); private short sBase=0;
+    // per‐type vertex + index buffers
+    private final List<Float> grassV = new ArrayList<>();
+    private final List<Short> grassI = new ArrayList<>();
+    private final List<Float> dirtV  = new ArrayList<>();
+    private final List<Short> dirtI  = new ArrayList<>();
+    private final List<Float> stoneV = new ArrayList<>();
+    private final List<Short> stoneI = new ArrayList<>();
+    private short grassIndex, dirtIndex, stoneIndex;
 
-    // the 6 cardinal normals
-    private static final Vector3[] NORMALS = {
-        new Vector3( 1,0,0), new Vector3(-1,0,0),
-        new Vector3( 0,1,0), new Vector3( 0,-1,0),
-        new Vector3( 0,0,1), new Vector3( 0,0,-1)
-    };
-
-    /**
-     * Build a single ModelInstance with three parts: "grass","dirt","stone".
-     */
     public ModelInstance buildChunkMesh(Chunk chunk) {
-        // clear out old data
-        grassV.clear(); grassI.clear(); gBase = 0;
-        dirtV.clear();  dirtI.clear();  dBase = 0;
-        stoneV.clear(); stoneI.clear(); sBase = 0;
+        grassV.clear(); grassI.clear();
+        dirtV.clear();  dirtI.clear();
+        stoneV.clear(); stoneI.clear();
+        grassIndex = dirtIndex = stoneIndex = 0;
 
-        // 1) X‐axis slices
+        // X faces
         for (int x = 0; x <= SIZE; x++) {
             byte[][] mask = buildMaskX(chunk, x);
-            mergeMask(mask, x, 0, 1, NORMALS[0]);
-            mergeMask(mask, x, 0, 1, NORMALS[1]);
+            mergeMaskX(mask, x, new Vector3(+1,0,0));
+            mergeMaskX(mask, x, new Vector3(-1,0,0));
         }
-        // 2) Y‐axis slices
+        // Y faces (grass top only for normal.y>0)
         for (int y = 0; y <= SIZE; y++) {
             byte[][] mask = buildMaskY(chunk, y);
-            mergeMask(mask, y, 1, 2, NORMALS[2]);
-            mergeMask(mask, y, 1, 2, NORMALS[3]);
+            mergeMaskY(mask, y, new Vector3(0,+1,0));
+            mergeMaskY(mask, y, new Vector3(0,-1,0));
         }
-        // 3) Z‐axis slices
+        // Z faces
         for (int z = 0; z <= SIZE; z++) {
             byte[][] mask = buildMaskZ(chunk, z);
-            mergeMask(mask, z, 2, 0, NORMALS[4]);
-            mergeMask(mask, z, 2, 0, NORMALS[5]);
+            mergeMaskZ(mask, z, new Vector3(0,0,+1));
+            mergeMaskZ(mask, z, new Vector3(0,0,-1));
         }
 
-        // turn buffers into Meshes
+        // build meshes
         Mesh grassMesh = makeMesh(grassV, grassI);
         Mesh dirtMesh  = makeMesh(dirtV,  dirtI);
         Mesh stoneMesh = makeMesh(stoneV, stoneI);
 
-        // materials
-        ColorAttribute matG = ColorAttribute.createDiffuse(Color.GREEN);
-        ColorAttribute matD = ColorAttribute.createDiffuse(new Color(0.6f,0.4f,0.2f,1f));
-        ColorAttribute matS = ColorAttribute.createDiffuse(Color.LIGHT_GRAY);
-        IntAttribute    noCull = IntAttribute.createCullFace(GL20.GL_NONE);
-
-// create Materials
-        Material grassMaterial = new Material(
+        // materials (disable back-face culling)
+        Material matG = new Material(
             ColorAttribute.createDiffuse(Color.GREEN),
             IntAttribute.createCullFace(GL20.GL_NONE)
         );
-        Material dirtMaterial = new Material(
-            ColorAttribute.createDiffuse(new Color(0.6f, 0.4f, 0.2f, 1f)),
+        Material matD = new Material(
+            ColorAttribute.createDiffuse(new Color(0.6f,0.4f,0.2f,1f)),
             IntAttribute.createCullFace(GL20.GL_NONE)
         );
-        Material stoneMaterial = new Material(
-            ColorAttribute.createDiffuse(Color.LIGHT_GRAY),
+        Material matS = new Material(
+            ColorAttribute.createDiffuse(Color.GRAY),
             IntAttribute.createCullFace(GL20.GL_NONE)
         );
 
-// bake into a single Model with three named parts
         ModelBuilder mb = new ModelBuilder();
         mb.begin();
-        mb.part("grass", grassMesh, GL20.GL_TRIANGLES, grassMaterial);
-        mb.part("dirt",  dirtMesh,  GL20.GL_TRIANGLES, dirtMaterial);
-        mb.part("stone", stoneMesh, GL20.GL_TRIANGLES, stoneMaterial);
+        mb.part("grass", grassMesh, GL20.GL_TRIANGLES, matG);
+        mb.part("dirt",  dirtMesh,  GL20.GL_TRIANGLES, matD);
+        mb.part("stone", stoneMesh, GL20.GL_TRIANGLES, matS);
         Model model = mb.end();
 
         return new ModelInstance(model);
     }
 
-    // build a simple 2D mask for X = constant
-    private byte[][] buildMaskX(Chunk c, int x) {
-        byte[][] m = new byte[SIZE][SIZE];
-        for (int y = 0; y < SIZE; y++)
-            for (int z = 0; z < SIZE; z++)
-                m[y][z] = c.getBlock(Math.min(x, SIZE-1), y, z);
-        return m;
-    }
-    // Y = constant
-    private byte[][] buildMaskY(Chunk c, int y) {
-        byte[][] m = new byte[SIZE][SIZE];
-        for (int x = 0; x < SIZE; x++)
-            for (int z = 0; z < SIZE; z++)
-                m[x][z] = c.getBlock(x, Math.min(y, SIZE-1), z);
-        return m;
-    }
-    // Z = constant
-    private byte[][] buildMaskZ(Chunk c, int z) {
-        byte[][] m = new byte[SIZE][SIZE];
-        for (int x = 0; x < SIZE; x++)
-            for (int y = 0; y < SIZE; y++)
-                m[x][y] = c.getBlock(x, y, Math.min(z, SIZE-1));
-        return m;
-    }
-
-    /**
-     * Greedily merge runs of identical block‐IDs in this 2D mask,
-     * then emit one big quad per rectangle.
-     *
-     * @param mask 2D block‐ID grid
-     * @param coord the fixed coordinate on axis a
-     * @param a axis index of that coord (0=X,1=Y,2=Z)
-     * @param b axis of mask rows
-     * @param normal which face we’re emitting
-     */
-    private void mergeMask(byte[][] mask,
-                           int coord, int a, int b,
-                           Vector3 normal)
-    {
-        int rows = mask.length, cols = mask[0].length;
-        for (int u = 0; u < rows; u++) {
-            for (int v = 0; v < cols; ) {
-                byte id = mask[u][v];
-                if (id == BlockType.AIR) { v++; continue; }
-                // measure width
-                int w = 1;
-                while (v + w < cols && mask[u][v + w] == id) w++;
-                // measure height
-                int h = 1;
-                outer:
-                while (u + h < rows) {
-                    for (int k = 0; k < w; k++)
-                        if (mask[u + h][v + k] != id) break outer;
-                    h++;
-                }
-
-                // build world‐space corners
-                float low[]  = new float[3], high[] = new float[3];
-                float comp = (a == 0 ? normal.x
-                    : (a == 1 ? normal.y
-                    : normal.z));
-                float off  = comp > 0 ? 1f : 0f;
-                low[a]  = coord + off;   high[a]  = low[a];
-                int c = 3 - (a + b); // because 0+1+2=3
-                low[b]  = u;            high[b]  = u + h;
-                low[c]  = v;            high[c]  = v + w;
-
-                Vector3 p1 = new Vector3(low[0],  low[1],  low[2]);
-                Vector3 p2 = new Vector3(high[0], low[1],  low[2]);
-                Vector3 p3 = new Vector3(high[0], high[1], high[2]);
-                Vector3 p4 = new Vector3(low[0],  high[1], high[2]);
-
-                // emit that quad
-                emitQuad(id, p1,p2,p3,p4, normal);
-
-                // zero out so we don’t re‐emit
-                for (int uu = 0; uu < h; uu++)
-                    for (int vv = 0; vv < w; vv++)
-                        mask[u + uu][v + vv] = BlockType.AIR;
-
-                v += w;
-            }
-        }
-    }
-
-    /**
-     * Choose the correct buffer (grass/dirt/stone), write 6 verts + 6 idx.
-     */
-    private void emitQuad(byte id,
-                          Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4,
-                          Vector3 n)
-    {
-        List<Float>  vBuf;
-        List<Short>  iBuf;
-        short        base;
-        if      (id == BlockType.GRASS) { vBuf = grassV; base = gBase; iBuf = grassI; }
-        else if (id == BlockType.SOIL)  { vBuf = dirtV;  base = dBase; iBuf = dirtI; }
-        else if (id == BlockType.STONE) { vBuf = stoneV; base = sBase; iBuf = stoneI; }
-        else return;
-
-        boolean flip = n.x + n.y + n.z < 0;
-        Vector3[] quad = flip
-            ? new Vector3[]{p1,p4,p3,p3,p2,p1}
-            : new Vector3[]{p1,p2,p3,p3,p4,p1};
-
-        // write verts
-        for (Vector3 v : quad) {
-            vBuf.add(v.x); vBuf.add(v.y); vBuf.add(v.z);
-            vBuf.add(n.x); vBuf.add(n.y); vBuf.add(n.z);
-        }
-        // write indices
-        for (short k = 0; k < 6; k++) {
-            iBuf.add((short)(base + k));
-        }
-        // bump the base
-        if      (id == BlockType.GRASS) gBase += 6;
-        else if (id == BlockType.SOIL)  dBase += 6;
-        else                             sBase += 6;
-    }
-
-    // helper to turn lists into a Mesh
     private Mesh makeMesh(List<Float> v, List<Short> i) {
         Mesh m = new Mesh(true,
-            v.size() / VERTEX_SIZE,
+            v.size()/VERTEX_SIZE,
             i.size(),
             new VertexAttribute(Usage.Position, 3, "a_position"),
             new VertexAttribute(Usage.Normal,   3, "a_normal")
         );
-        m.setVertices(toFloatArray(v));
-        m.setIndices (toShortArray(i));
+        // to float/short arrays
+        float[] fv = new float[v.size()];
+        for (int j = 0; j < fv.length; j++) fv[j] = v.get(j);
+        short[] si = new short[i.size()];
+        for (int j = 0; j < si.length; j++) si[j] = i.get(j);
+        m.setVertices(fv);
+        m.setIndices(si);
         return m;
     }
 
-    private float[] toFloatArray(List<Float> list) {
-        float[] a = new float[list.size()];
-        for (int i = 0; i < a.length; i++) a[i] = list.get(i);
-        return a;
+    private byte[][] buildMaskX(Chunk c, int x) {
+        byte[][] mask = new byte[SIZE][SIZE];
+        for (int y=0; y<SIZE; y++) for (int z=0; z<SIZE; z++)
+            mask[y][z] = c.getBlock(x, y, z);
+        return mask;
     }
-    private short[] toShortArray(List<Short> list) {
-        short[] a = new short[list.size()];
-        for (int i = 0; i < a.length; i++) a[i] = list.get(i);
-        return a;
+    private byte[][] buildMaskY(Chunk c, int y) {
+        byte[][] mask = new byte[SIZE][SIZE];
+        for (int x=0; x<SIZE; x++) for (int z=0; z<SIZE; z++)
+            mask[x][z] = c.getBlock(x, y, z);
+        return mask;
+    }
+    private byte[][] buildMaskZ(Chunk c, int z) {
+        byte[][] mask = new byte[SIZE][SIZE];
+        for (int x=0; x<SIZE; x++) for (int y=0; y<SIZE; y++)
+            mask[x][y] = c.getBlock(x, y, z);
+        return mask;
+    }
+
+    private void mergeMaskX(byte[][] mask, int x, Vector3 normal) {
+        int dy = mask.length, dz = mask[0].length;
+        for (int y=0; y<dy; y++) {
+            for (int z=0; z<dz; ) {
+                byte id = mask[y][z];
+                if (id==BlockType.AIR) { z++; continue; }
+                int w=1; while (z+w<dz && mask[y][z+w]==id) w++;
+                int h=1; outer: while (y+h<dy) {
+                    for (int k=0; k<w; k++) if (mask[y+h][z+k]!=id) break outer;
+                    h++;
+                }
+                float x0 = x + (normal.x>0?1:0), y0=y, z0=z;
+                float y1 = y+h, z1=z+w;
+                Vector3 p1 = new Vector3(x0,y0,z0);
+                Vector3 p2 = new Vector3(x0,y1,z0);
+                Vector3 p3 = new Vector3(x0,y1,z1);
+                Vector3 p4 = new Vector3(x0,y0,z1);
+                emitQuad(id, p1,p2,p3,p4, normal);
+                for (int yy=0; yy<h; yy++) for (int zz=0; zz<w; zz++) mask[y+yy][z+zz]=BlockType.AIR;
+                z+=w;
+            }
+        }
+    }
+    private void mergeMaskY(byte[][] mask, int y, Vector3 normal) {
+        int dx = mask.length, dz = mask[0].length;
+        for (int x=0; x<dx; x++) {
+            for (int z=0; z<dz; ) {
+                byte id = mask[x][z]; if (id==BlockType.AIR) { z++; continue; }
+                int w=1; while (z+w<dz && mask[x][z+w]==id) w++;
+                int h=1; outer: while (x+h<dx) {
+                    for (int k=0; k<w; k++) if (mask[x+h][z+k]!=id) break outer;
+                    h++;
+                }
+                float x0=x, z0=z,
+                    x1=x+h, z1=z+w,
+                    y0=y + (normal.y>0?1:0);
+                Vector3 p1=new Vector3(x0,y0,z0);
+                Vector3 p2=new Vector3(x1,y0,z0);
+                Vector3 p3=new Vector3(x1,y0,z1);
+                Vector3 p4=new Vector3(x0,y0,z1);
+                emitQuad(id,p1,p2,p3,p4,normal);
+                for (int xx=0; xx<h; xx++) for (int zz=0; zz<w; zz++) mask[x+xx][z+zz]=BlockType.AIR;
+                z+=w;
+            }
+        }
+    }
+    private void mergeMaskZ(byte[][] mask, int z, Vector3 normal) {
+        int dx = mask.length, dy = mask[0].length;
+        for (int x=0; x<dx; x++) {
+            for (int y=0; y<dy; ) {
+                byte id = mask[x][y]; if (id==BlockType.AIR) { y++; continue; }
+                int w=1; while (y+w<dy && mask[x][y+w]==id) w++;
+                int h=1; outer: while (x+h<dx) {
+                    for (int k=0; k<w; k++) if (mask[x+h][y+k]!=id) break outer;
+                    h++;
+                }
+                float x0=x, y0=y,
+                    x1=x+h, y1=y+w,
+                    z0=z + (normal.z>0?1:0);
+                Vector3 p1=new Vector3(x0,y0,z0);
+                Vector3 p2=new Vector3(x1,y0,z0);
+                Vector3 p3=new Vector3(x1,y1,z0);
+                Vector3 p4=new Vector3(x0,y1,z0);
+                emitQuad(id,p1,p2,p3,p4,normal);
+                for (int xx=0; xx<h; xx++) for (int yy=0; yy<w; yy++) mask[x+xx][y+yy]=BlockType.AIR;
+                y+=w;
+            }
+        }
+    }
+
+    private void emitQuad(byte id,
+                          Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4,
+                          Vector3 normal) {
+        List<Float> vBuf; List<Short> iBuf; short base;
+        boolean top = (id==BlockType.GRASS && normal.y>0);
+        if (top)      { vBuf=grassV; iBuf=grassI; base=grassIndex; }
+        else if (id==BlockType.DIRT)  { vBuf=dirtV; iBuf=dirtI; base=dirtIndex; }
+        else if (id==BlockType.STONE) { vBuf=stoneV; iBuf=stoneI; base=stoneIndex; }
+        else return;
+        boolean flip = (normal.x+normal.y+normal.z) < 0;
+        Vector3[] quad = flip
+            ? new Vector3[]{p1,p4,p3,p3,p2,p1}
+            : new Vector3[]{p1,p2,p3,p3,p4,p1};
+        for (Vector3 v : quad) {
+            vBuf.add(v.x); vBuf.add(v.y); vBuf.add(v.z);
+            vBuf.add(normal.x); vBuf.add(normal.y); vBuf.add(normal.z);
+        }
+        for (int i=0; i<6; i++) iBuf.add((short)(base + i));
+        if (top)      grassIndex += 6;
+        else if (id==BlockType.DIRT)  dirtIndex += 6;
+        else if (id==BlockType.STONE) stoneIndex += 6;
     }
 }
