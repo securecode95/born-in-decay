@@ -1,29 +1,38 @@
 package com.rabalder.bornindecay;
 
-import com.badlogic.gdx.graphics.g3d.ModelInstance;
 import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.graphics.g3d.ModelInstance;
+import java.util.ArrayList;
 import java.util.List;
 
 public class WorldManager {
-    private final WorldGenerator gen;
+    private final WorldGenerator gen = new WorldGenerator(12345L);
+    private final ChunkMeshBuilder meshBuilder = new ChunkMeshBuilder();
+    private final List<ModelInstance> instances = new ArrayList<>();
 
-    /** No-arg constructor now seeds the generator properly. */
     public WorldManager() {
-        this.gen = new WorldGenerator(System.currentTimeMillis());
+        // generate a single chunk at (0,0)
+        gen.generateAt(0,0);
+        rebuildMeshes();
     }
 
-    /** Generate/unload terrain around the player. */
-    public void update(Vector3 playerPosition) {
-        gen.update(playerPosition);
+    /** Call whenever the player moves far enough */
+    public void update(Vector3 playerPos) {
+        // (we only ever have one chunk here)
+        rebuildMeshes();
     }
 
-    /** What to render this frame. */
+    private void rebuildMeshes() {
+        instances.clear();
+        for (Chunk c : gen.getLoadedChunks()) {
+            instances.add(meshBuilder.buildChunkMesh(c));
+        }
+    }
+
     public List<ModelInstance> getChunkMeshes() {
-        // switched from getLoadedChunks() to getVisibleChunks()
-        return gen.getVisibleChunks();
+        return instances;
     }
 
-    /** What to collide against this frame. */
     public List<Vector3> getCollisionVoxels() {
         return gen.getCollisionVoxels();
     }
