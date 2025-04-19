@@ -11,6 +11,14 @@ public class Chunk {
     // 3D array of blocks, each block will be represented by a byte (AIR, GRASS, SOIL)
     public final byte[][][] blocks = new byte[SIZE][SIZE][SIZE];
 
+    public byte[][] buildMaskX(int x) {
+        byte[][] mask = new byte[SIZE][SIZE];
+        for (int y = 0; y < SIZE; y++)
+            for (int z = 0; z < SIZE; z++)
+                mask[y][z] = getBlock(x, y, z);
+        return mask;
+    }
+
     // Used to store the mesh after greedy meshing is applied
     public ModelInstance meshInstance;
 
