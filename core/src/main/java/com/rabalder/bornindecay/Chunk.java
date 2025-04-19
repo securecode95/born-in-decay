@@ -3,6 +3,13 @@ package com.rabalder.bornindecay;
 public class Chunk {
     public static final int SIZE = 16;
     private final int chunkX, chunkZ;
+    public int getChunkX() {
+        return this.chunkX;
+    }
+    public int getChunkZ() {
+        return this.chunkZ;
+    }
+
     private final byte[][][] blocks = new byte[SIZE][SIZE][SIZE];
 
     /** Remember which chunk this is, so we can re‑key it. */
@@ -58,6 +65,4 @@ public class Chunk {
         return (((long)chunkX) << 32) | (chunkZ & 0xffffffffL);
     }
 
-    public int getChunkX() { return chunkX; }
-    public int getChunkZ() { return chunkZ; }
 }
