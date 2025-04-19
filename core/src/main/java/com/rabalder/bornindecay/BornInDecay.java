@@ -31,6 +31,7 @@ public class BornInDecay extends ApplicationAdapter {
 
     @Override
     public void create() {
+        //test 102
         Gdx.gl.glDisable(GL20.GL_CULL_FACE);
         Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
 
