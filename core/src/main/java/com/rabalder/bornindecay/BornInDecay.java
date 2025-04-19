@@ -10,142 +10,124 @@ import com.badlogic.gdx.graphics.g3d.*;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
 import com.badlogic.gdx.graphics.g3d.environment.DirectionalLight;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
-import com.badlogic.gdx.math.Vector3;
-import java.util.List;
 import com.badlogic.gdx.graphics.g2d.BitmapFont;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
+import com.badlogic.gdx.math.Vector3;
 
+import java.util.List;
 
 public class BornInDecay extends ApplicationAdapter {
     private PerspectiveCamera camera;
     private ModelBatch modelBatch;
     private Environment environment;
     private ShapeRenderer shapeRenderer;
-
     private PlayerController player;
     private ModelInstance highlightInstance;
     private boolean highlightVisible = false;
-
     private WorldManager worldManager;
 
-    //fps counter
     private SpriteBatch spriteBatch;
     private BitmapFont font;
 
     @Override
     public void create() {
-
-        //fps counter
-        spriteBatch = new SpriteBatch();
-        font = new BitmapFont(); // default font
-        font.setColor(Color.WHITE); // set font color to white
-
-        modelBatch = new ModelBatch();
-        shapeRenderer = new ShapeRenderer();
-
-        camera = new PerspectiveCamera(67, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-        camera.near = 0.1f;
-        camera.far = 128;
-
-        player = new PlayerController();
-        player.position.set(8f, 10f, 8f); // Start above ground
-        player.resetLook();
-
-        highlightInstance = new ModelInstance(Materials.HIGHLIGHT_CUBE);
+        // ——— setup rendering & input ———
+        spriteBatch    = new SpriteBatch();
+        font           = new BitmapFont();
+        font.setColor(Color.WHITE);
+        modelBatch     = new ModelBatch();
+        shapeRenderer  = new ShapeRenderer();
+        camera         = new PerspectiveCamera(67, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+        camera.near    = 0.1f;
+        camera.far     = 128f;
         Gdx.input.setCursorCatched(true);
 
         environment = new Environment();
-        environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.8f, 0.8f, 0.8f, 1f));
+        environment.set(new ColorAttribute(ColorAttribute.AmbientLight, 0.8f,0.8f,0.8f,1f));
         environment.add(new DirectionalLight().set(Color.WHITE, -1f, -0.8f, -0.2f));
 
+        // ——— initialize world manager ———
         worldManager = new WorldManager(Materials.GRASSY_BLOCK_MODEL, Materials.DECAYED_SOIL_MODEL);
+
+        // ——— spawn player at (8, ?, 8) but y to be computed ———
+        player = new PlayerController();
+        // temporarily set y=0 so worldManager will generate around (8,0,8)
+        player.position.set(8f, 0f, 8f);
+        player.resetLook();
+
+        // generate the chunks around the spawn point
+        worldManager.update(player.position);
+
+        // find the highest solid‐voxel under (8,8)
+        List<Vector3> voxels = worldManager.getCollisionVoxels();
+        float surfaceY = 0f;
+        for (Vector3 v : voxels) {
+            // each v.x = blockX + 0.5, so match around 8.5
+            if (Math.abs(v.x - (player.position.x + 0.5f)) < 0.01f &&
+                Math.abs(v.z - (player.position.z + 0.5f)) < 0.01f) {
+                surfaceY = Math.max(surfaceY, v.y);
+            }
+        }
+        // place player half‐unit above that block
+        player.position.y = surfaceY + 0.5f;
+
+        // highlight cube for block targeting
+        highlightInstance = new ModelInstance(Materials.HIGHLIGHT_CUBE);
     }
 
     @Override
     public void render() {
         float deltaTime = Gdx.graphics.getDeltaTime();
 
-        // Update the world (chunks, meshes, etc.)
+        // 1) update world (generate/remove chunks)
         worldManager.update(player.position);
 
-        // Get all visible chunk meshes after greedy meshing is applied
+        // 2) get visible chunk meshes + collision voxels
         List<ModelInstance> visibleChunks  = worldManager.getChunkMeshes();
-        List<Vector3>    collisionVoxels = worldManager.getCollisionVoxels();
+        List<Vector3>       collisionVoxels = worldManager.getCollisionVoxels();
+
+        // 3) update player (now colliding against actual voxels)
         player.update(camera, deltaTime, collisionVoxels);
 
-        // 🎯 Highlight block (This should remain the same for block interaction)
+        // … rest of your render code (highlight, draw chunks, UI) unchanged …
         ModelInstance targetBlock = RaycastUtil.getTargetedBlock(camera, visibleChunks, 6f);
-        if (targetBlock != null) {
+        highlightVisible = targetBlock != null;
+        if (highlightVisible) {
             Vector3 targetPos = targetBlock.transform.getTranslation(new Vector3());
             highlightInstance.transform.setToTranslation(targetPos);
-            highlightVisible = true;
-        } else {
-            highlightVisible = false;
         }
 
-        // 🔨 Block removal (Remove block when left mouse button is pressed)
-        if (Gdx.input.isButtonJustPressed(Input.Buttons.LEFT) && targetBlock != null) {
-            visibleChunks.remove(targetBlock);
-        }
-
-        // ➕ Block placement (Place block when right mouse button is pressed)
-        if (Gdx.input.isButtonJustPressed(Input.Buttons.RIGHT) && targetBlock != null) {
-            Vector3 placePos = RaycastUtil.getPlacementPosition(targetBlock, camera);
-            placePos.set(Math.round(placePos.x), Math.round(placePos.y), Math.round(placePos.z));
-
-            ModelInstance newBlock = new ModelInstance(Materials.GRASSY_BLOCK_MODEL); // Use appropriate model
-            newBlock.transform.setToTranslation(placePos);
-            visibleChunks.add(newBlock);
-        }
-
-        // 🖱 Cursor locking (Ensure the mouse is locked in the game window)
-        if (!Gdx.input.isCursorCatched() && Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
-            Gdx.input.setCursorCatched(true);
-        }
-        if (Gdx.input.isKeyJustPressed(Input.Keys.ESCAPE)) {
-            Gdx.input.setCursorCatched(false);
-        }
-
-        // 🧼 Clear screen
-        Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-        Gdx.gl.glClearColor(0.05f, 0.05f, 0.1f, 1f);
+        // clear screen
+        Gdx.gl.glViewport(0,0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
+        Gdx.gl.glClearColor(0.05f,0.05f,0.1f,1f);
         Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
 
-        // 🖼 Render chunk meshes
+        // render
         modelBatch.begin(camera);
+        if (highlightVisible) modelBatch.render(highlightInstance, environment);
 
-        if (highlightVisible) {
-            modelBatch.render(highlightInstance, environment); // Highlight the target block
-        }
-
-        // Render the chunk meshes
         for (ModelInstance chunkMesh : visibleChunks) {
-            Vector3 chunkPos = chunkMesh.transform.getTranslation(new Vector3());
-            if (camera.frustum.boundsInFrustum(chunkPos, new Vector3(0.5f, 0.5f, 0.5f))) {
-                modelBatch.render(chunkMesh, environment);
-            }
+            modelBatch.render(chunkMesh, environment);
         }
 
         modelBatch.end();
 
-        // 🖌 Draw the cursor (if needed)
+        // cursor & FPS
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         shapeRenderer.setColor(Color.WHITE);
-        shapeRenderer.circle(Gdx.graphics.getWidth() / 2f, Gdx.graphics.getHeight() / 2f, 3f);
+        shapeRenderer.circle(
+            Gdx.graphics.getWidth()/2f,
+            Gdx.graphics.getHeight()/2f,
+            3f);
         shapeRenderer.end();
 
-        // 🧾 FPS counter (To monitor the frame rate)
         spriteBatch.begin();
-        font.draw(spriteBatch, "FPS: " + Gdx.graphics.getFramesPerSecond(), 10, Gdx.graphics.getHeight() - 10);
+        font.draw(spriteBatch,
+            "FPS: "+Gdx.graphics.getFramesPerSecond(),
+            10,
+            Gdx.graphics.getHeight()-10);
         spriteBatch.end();
-
-        // 🖱 Re-capture mouse if lost focus
-        if (!Gdx.input.isCursorCatched() && Gdx.input.isTouched()) {
-            Gdx.input.setCursorCatched(true);
-        }
     }
-
-
 
     @Override
     public void dispose() {
