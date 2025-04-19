@@ -1,317 +1,230 @@
 package com.rabalder.bornindecay;
 
 import com.badlogic.gdx.graphics.*;
-import com.badlogic.gdx.graphics.VertexAttributes.Usage;
-import com.badlogic.gdx.graphics.g3d.attributes.IntAttribute;
-import com.badlogic.gdx.math.Vector3;
-import com.badlogic.gdx.graphics.g3d.ModelInstance;
-import com.badlogic.gdx.graphics.g3d.Model;
-import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
 import com.badlogic.gdx.graphics.g3d.Material;
+import com.badlogic.gdx.graphics.g3d.Model;
+import com.badlogic.gdx.graphics.g3d.ModelInstance;
 import com.badlogic.gdx.graphics.g3d.attributes.ColorAttribute;
-import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.g3d.attributes.IntAttribute;
+import com.badlogic.gdx.graphics.g3d.utils.ModelBuilder;
+import com.badlogic.gdx.math.Vector3;
+
 import java.util.ArrayList;
+import java.util.List;
 
-/**
- * Builds a greedy‑meshed chunk: merges adjacent faces on X, Y and Z slices.
- */
 public class ChunkMeshBuilder {
-    private static final int VERTEX_SIZE = 3 + 3; // pos + normal
+    private static final int VERTEX_SIZE = 6; // 3 pos + 3 normal
 
-    private final ArrayList<Float> vertices = new ArrayList<>();
-    private final ArrayList<Short> indices = new ArrayList<>();
-    private short index = 0;
+    // buffers for grass top faces
+    private final List<Float> grassVerts = new ArrayList<>();
+    private final List<Short> grassIdx   = new ArrayList<>();
+    private short grassIndex = 0;
 
-    public ChunkMeshBuilder() {}
+    // buffers for soil faces
+    private final List<Float> soilVerts  = new ArrayList<>();
+    private final List<Short> soilIdx    = new ArrayList<>();
+    private short soilIndex  = 0;
 
-    // Low‑level: add a quad (p1→p2→p3 + p3→p4→p1)
-    public void addFace(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4, Vector3 normal) {
-        addVertex(p1, normal);
-        addVertex(p2, normal);
-        addVertex(p3, normal);
-        addVertex(p3, normal);
-        addVertex(p4, normal);
-        addVertex(p1, normal);
-        
-    }
-
-    private void addVertex(Vector3 pos, Vector3 normal) {
-        vertices.add(pos.x);
-        vertices.add(pos.y);
-        vertices.add(pos.z);
-        vertices.add(normal.x);
-        vertices.add(normal.y);
-        vertices.add(normal.z);
-        indices.add(index++);
-    }
-
-    /** Build the low‑level Mesh object from accumulated verts+inds. **/
-    public ChunkMesh build() {
-        // 1) convert your ArrayLists into primitive arrays
-        float[] vertArray = new float[vertices.size()];
-        for (int i = 0; i < vertArray.length; i++) {
-            vertArray[i] = vertices.get(i);
-        }
-
-        short[] indArray = new short[indices.size()];
-        for (int i = 0; i < indArray.length; i++) {
-            indArray[i] = indices.get(i);
-        }
-
-        // 2) create the Mesh
-        Mesh mesh = new Mesh(
-            true,
-            vertArray.length / VERTEX_SIZE, // num vertices
-            indArray.length,                // num indices
-            new VertexAttribute(Usage.Position, 3, "a_position"),
-            new VertexAttribute(Usage.Normal,   3, "a_normal")
-        );
-        mesh.setVertices(vertArray);
-        mesh.setIndices(indArray);
-
-        // 3) bake the Mesh into a Model
-        Material mat = new Material(ColorAttribute.createDiffuse(Color.WHITE),IntAttribute.createCullFace(GL20.GL_NONE));
-        ModelBuilder mb = new ModelBuilder();
-        mb.begin();
-        mb.part("chunk", mesh, GL20.GL_TRIANGLES, mat);
-        Model model = mb.end();
-
-        // 4) return both mesh+model wrapped in ChunkMesh
-        return new ChunkMesh(mesh, model);
-    }
-
-
-
-    /**
-     * Greedy‑mesh the six directions (+X,‑X; +Y,‑Y; +Z,‑Z).
-     */
     public ModelInstance buildChunkMesh(Chunk chunk) {
-        // 1) Reset our buffers
-        vertices.clear();
-        indices.clear();
-        index = 0;
+        // clear buffers
+        grassVerts.clear(); grassIdx.clear(); grassIndex = 0;
+        soilVerts.clear();  soilIdx.clear();  soilIndex  = 0;
 
-        // 2) A reusable 2D mask for each slice
         byte[][] mask = new byte[Chunk.SIZE][Chunk.SIZE];
 
-        // ---- X‑axis faces (+X = EAST, -X = WEST) ----
-        for (int x = 0; x < Chunk.SIZE; x++) {
-            // +X (EAST)
-            for (int y = 0; y < Chunk.SIZE; y++) {
-                for (int z = 0; z < Chunk.SIZE; z++) {
-                    byte cur  = chunk.blocks[x][y][z];
-                    byte next = (x+1 < Chunk.SIZE ? chunk.blocks[x+1][y][z] : Chunk.AIR);
-                    mask[y][z] = (cur != Chunk.AIR && next == Chunk.AIR) ? cur : 0;
-                }
+        // X-axis
+        for(int x=0; x<Chunk.SIZE; x++){
+            // +X faces
+            for(int y=0;y<Chunk.SIZE;y++) for(int z=0;z<Chunk.SIZE;z++){
+                byte cur = chunk.blocks[x][y][z];
+                byte next = x+1<Chunk.SIZE? chunk.blocks[x+1][y][z] : Chunk.AIR;
+                mask[y][z] = (cur!=Chunk.AIR && next==Chunk.AIR)? cur : 0;
             }
-            mergeMaskX(mask, x, Direction.EAST);
-
-            // -X (WEST)
-            for (int y = 0; y < Chunk.SIZE; y++) {
-                for (int z = 0; z < Chunk.SIZE; z++) {
-                    byte cur  = chunk.blocks[x][y][z];
-                    byte prev = (x-1 >= 0      ? chunk.blocks[x-1][y][z] : Chunk.AIR);
-                    mask[y][z] = (cur != Chunk.AIR && prev == Chunk.AIR) ? cur : 0;
-                }
+            mergeMaskX(mask, x, new Vector3( 1,0,0));
+            // -X faces
+            for(int y=0;y<Chunk.SIZE;y++) for(int z=0;z<Chunk.SIZE;z++){
+                byte cur = chunk.blocks[x][y][z];
+                byte prev = x-1>=0? chunk.blocks[x-1][y][z] : Chunk.AIR;
+                mask[y][z] = (cur!=Chunk.AIR && prev==Chunk.AIR)? cur : 0;
             }
-            mergeMaskX(mask, x, Direction.WEST);
+            mergeMaskX(mask, x, new Vector3(-1,0,0));
         }
 
-        // ---- Y‑axis faces (+Y = UP, -Y = DOWN) ----
-        for (int y = 0; y < Chunk.SIZE; y++) {
-            // +Y (UP)
-            for (int x = 0; x < Chunk.SIZE; x++) {
-                for (int z = 0; z < Chunk.SIZE; z++) {
-                    byte cur  = chunk.blocks[x][y][z];
-                    byte next = (y+1 < Chunk.SIZE ? chunk.blocks[x][y+1][z] : Chunk.AIR);
-                    mask[x][z] = (cur != Chunk.AIR && next == Chunk.AIR) ? cur : 0;
-                }
+        // Y-axis
+        for(int y=0; y<Chunk.SIZE; y++){
+            // +Y
+            for(int x=0;x<Chunk.SIZE;x++) for(int z=0;z<Chunk.SIZE;z++){
+                byte cur = chunk.blocks[x][y][z];
+                byte next = y+1<Chunk.SIZE? chunk.blocks[x][y+1][z] : Chunk.AIR;
+                mask[x][z] = (cur!=Chunk.AIR && next==Chunk.AIR)? cur : 0;
             }
-            mergeMaskY(mask, y, Direction.UP);
-
-            // -Y (DOWN)
-            for (int x = 0; x < Chunk.SIZE; x++) {
-                for (int z = 0; z < Chunk.SIZE; z++) {
-                    byte cur  = chunk.blocks[x][y][z];
-                    byte prev = (y-1 >= 0      ? chunk.blocks[x][y-1][z] : Chunk.AIR);
-                    mask[x][z] = (cur != Chunk.AIR && prev == Chunk.AIR) ? cur : 0;
-                }
+            mergeMaskY(mask, y, new Vector3(0, 1,0));
+            // -Y
+            for(int x=0;x<Chunk.SIZE;x++) for(int z=0;z<Chunk.SIZE;z++){
+                byte cur = chunk.blocks[x][y][z];
+                byte prev = y-1>=0? chunk.blocks[x][y-1][z] : Chunk.AIR;
+                mask[x][z] = (cur!=Chunk.AIR && prev==Chunk.AIR)? cur : 0;
             }
-            mergeMaskY(mask, y, Direction.DOWN);
+            mergeMaskY(mask, y, new Vector3(0,-1,0));
         }
 
-        // ---- Z‑axis faces (+Z = SOUTH, -Z = NORTH) ----
-        for (int z = 0; z < Chunk.SIZE; z++) {
-            // +Z (SOUTH)
-            for (int x = 0; x < Chunk.SIZE; x++) {
-                for (int y = 0; y < Chunk.SIZE; y++) {
-                    byte cur  = chunk.blocks[x][y][z];
-                    byte next = (z+1 < Chunk.SIZE ? chunk.blocks[x][y][z+1] : Chunk.AIR);
-                    mask[x][y] = (cur != Chunk.AIR && next == Chunk.AIR) ? cur : 0;
-                }
+        // Z-axis
+        for(int z=0; z<Chunk.SIZE; z++){
+            // +Z
+            for(int x=0;x<Chunk.SIZE;x++) for(int y=0;y<Chunk.SIZE;y++){
+                byte cur = chunk.blocks[x][y][z];
+                byte next = z+1<Chunk.SIZE? chunk.blocks[x][y][z+1] : Chunk.AIR;
+                mask[x][y] = (cur!=Chunk.AIR && next==Chunk.AIR)? cur : 0;
             }
-            mergeMaskZ(mask, z, Direction.SOUTH);
-
-            // -Z (NORTH)
-            for (int x = 0; x < Chunk.SIZE; x++) {
-                for (int y = 0; y < Chunk.SIZE; y++) {
-                    byte cur  = chunk.blocks[x][y][z];
-                    byte prev = (z-1 >= 0      ? chunk.blocks[x][y][z-1] : Chunk.AIR);
-                    mask[x][y] = (cur != Chunk.AIR && prev == Chunk.AIR) ? cur : 0;
-                }
+            mergeMaskZ(mask, z, new Vector3(0,0, 1));
+            // -Z
+            for(int x=0;x<Chunk.SIZE;x++) for(int y=0;y<Chunk.SIZE;y++){
+                byte cur = chunk.blocks[x][y][z];
+                byte prev = z-1>=0? chunk.blocks[x][y][z-1] : Chunk.AIR;
+                mask[x][y] = (cur!=Chunk.AIR && prev==Chunk.AIR)? cur : 0;
             }
-            mergeMaskZ(mask, z, Direction.NORTH);
+            mergeMaskZ(mask, z, new Vector3(0,0,-1));
         }
 
-        // 3) Build the low‑level Mesh and bake into a ModelInstance
-        ChunkMesh chunkMesh = build();          // build() now returns your greedy‑meshed ChunkMesh
-        Mesh mesh           = chunkMesh.mesh;   // extract the Mesh
-        Material mat        = new Material(ColorAttribute.createDiffuse(Color.WHITE),IntAttribute.createCullFace(GL20.GL_NONE));
+        // build grass mesh
+        Mesh gMesh = new Mesh(true,
+            grassVerts.size()/VERTEX_SIZE,
+            grassIdx.size(),
+            new VertexAttribute(VertexAttributes.Usage.Position,3,"a_position"),
+            new VertexAttribute(VertexAttributes.Usage.Normal,3,"a_normal")
+        );
+        gMesh.setVertices(toFloatArray(grassVerts));
+        gMesh.setIndices (toShortArray(grassIdx));
 
+        // build soil mesh
+        Mesh sMesh = new Mesh(true,
+            soilVerts.size()/VERTEX_SIZE,
+            soilIdx.size(),
+            new VertexAttribute(VertexAttributes.Usage.Position,3,"a_position"),
+            new VertexAttribute(VertexAttributes.Usage.Normal,3,"a_normal")
+        );
+        sMesh.setVertices(toFloatArray(soilVerts));
+        sMesh.setIndices (toShortArray(soilIdx));
+
+        // materials
+        Material grassMat = new Material(
+            ColorAttribute.createDiffuse(Color.GREEN),
+            ColorAttribute.createSpecular(0.2f, 0.2f, 0.2f, 1f),
+            IntAttribute.createCullFace(GL20.GL_BACK)
+        );
+        Material soilMat = new Material(
+            ColorAttribute.createDiffuse(new Color(0.6f, 0.4f, 0.2f, 1f)),
+            ColorAttribute.createSpecular(0.1f, 0.1f, 0.1f, 1f),
+            IntAttribute.createCullFace(GL20.GL_BACK)
+        );
+
+        // bake into model
         ModelBuilder mb = new ModelBuilder();
         mb.begin();
-        mb.part("chunk", mesh, GL20.GL_TRIANGLES, mat);
+        mb.part("grass", gMesh, GL20.GL_TRIANGLES, grassMat);
+        mb.part("soil",  sMesh, GL20.GL_TRIANGLES, soilMat);
         Model model = mb.end();
 
         return new ModelInstance(model);
     }
 
-
-    // ---- Helper: merge a mask on an X‑slice at fixed x ----
-    private void mergeMaskX(byte[][] mask, int x, Direction dir) {
-        int H = Chunk.SIZE, W = Chunk.SIZE;
-        for (int y = 0; y < H; y++) {
-            for (int z = 0; z < W; z++) {
-                byte type = mask[y][z];
-                if (type == 0) continue;
-
-                // find width
-                int w;
-                for (w = 1; z + w < W && mask[y][z + w] == type; w++) {}
-
-                // find height
-                int h = 1;
-                outer: for (; y + h < H; h++) {
-                    for (int k = 0; k < w; k++) {
-                        if (mask[y + h][z + k] != type) break outer;
-                    }
-                }
-
-                // zero out
-                for (int dy = 0; dy < h; dy++)
-                    for (int dx = 0; dx < w; dx++)
-                        mask[y + dy][z + dx] = 0;
-
-                emitQuadX(x, y, z, w, h, dir);
+    private void mergeMaskX(byte[][] mask, int x, Vector3 normal) {
+        int dimY = mask.length;
+        int dimZ = mask[0].length;
+        for(int y=0;y<dimY;y++){
+            for(int z=0;z<dimZ;){
+                byte b = mask[y][z]; if(b==0){ z++; continue; }
+                int w=1; while(z+w<dimZ && mask[y][z+w]==b) w++;
+                int h=1; outer: while(y+h<dimY){
+                    for(int k=0;k<w;k++) if(mask[y+h][z+k]!=b) break outer;
+                    h++; }
+                float x0 = x + (normal.x>0?1f:0f);
+                Vector3 p1=new Vector3(x0, y,   z  );
+                Vector3 p2=new Vector3(x0, y+h, z  );
+                Vector3 p3=new Vector3(x0, y+h, z+w);
+                Vector3 p4=new Vector3(x0, y,   z+w);
+                boolean top = (normal.x==0 && normal.y>0 && b==Chunk.GRASS);
+                addQuad(p1,p2,p3,p4, normal, top);
+                for(int dy=0;dy<h;dy++) for(int dz2=0;dz2<w;dz2++) mask[y+dy][z+dz2]=0;
+                z += w;
             }
         }
     }
 
-    private void emitQuadX(int x, int y, int z, int w, int h, Direction dir) {
-        float x0 = (dir == Direction.EAST ? x + 1 : x);
-        float y0 = y,   z0 = z;
-        float y1 = y + h, z1 = z + w;
-        Vector3 n = dir.normal;
-
-        Vector3 p1 = new Vector3(x0, y0, z0);
-        Vector3 p2 = new Vector3(x0, y1, z0);
-        Vector3 p3 = new Vector3(x0, y1, z1);
-        Vector3 p4 = new Vector3(x0, y0, z1);
-
-        if (dir == Direction.WEST) {
-            addFace(p1, p4, p3, p2, n);
-        } else {
-            addFace(p1, p2, p3, p4, n);
-        }
-    }
-
-    // ---- Helper: merge a mask on a Y‑slice at fixed y ----
-    private void mergeMaskY(byte[][] mask, int y, Direction dir) {
-        int H = Chunk.SIZE, W = Chunk.SIZE;
-        for (int x = 0; x < H; x++) {
-            for (int z = 0; z < W; z++) {
-                byte type = mask[x][z];
-                if (type == 0) continue;
-
-                int w;
-                for (w = 1; z + w < W && mask[x][z + w] == type; w++) {}
-
-                int h = 1;
-                outer: for (; x + h < H; h++) {
-                    for (int k = 0; k < w; k++) {
-                        if (mask[x + h][z + k] != type) break outer;
-                    }
-                }
-
-                for (int dx = 0; dx < h; dx++)
-                    for (int dz = 0; dz < w; dz++)
-                        mask[x + dx][z + dz] = 0;
-
-                emitQuadY(y, x, z, w, h, dir);
+    private void mergeMaskY(byte[][] mask, int y, Vector3 normal) {
+        int dimX = mask.length;
+        int dimZ = mask[0].length;
+        for(int x=0;x<dimX;x++){
+            for(int z=0;z<dimZ;){
+                byte b = mask[x][z]; if(b==0){ z++; continue; }
+                int w=1; while(z+w<dimZ && mask[x][z+w]==b) w++;
+                int h=1; outer: while(x+h<dimX){
+                    for(int k=0;k<w;k++) if(mask[x+h][z+k]!=b) break outer;
+                    h++; }
+                float y0 = y + (normal.y>0?1f:0f);
+                Vector3 p1=new Vector3(x,   y0, z  );
+                Vector3 p2=new Vector3(x+h, y0, z  );
+                Vector3 p3=new Vector3(x+h, y0, z+w);
+                Vector3 p4=new Vector3(x,   y0, z+w);
+                boolean top = (normal.y>0 && b==Chunk.GRASS);
+                addQuad(p1,p2,p3,p4, normal, top);
+                for(int dx=0;dx<h;dx++) for(int dz2=0;dz2<w;dz2++) mask[x+dx][z+dz2]=0;
+                z += w;
             }
         }
     }
 
-    private void emitQuadY(int y, int x, int z, int w, int h, Direction dir) {
-        float y0 = (dir == Direction.UP ? y + 1 : y);
-        float x0 = x,     z0 = z;
-        float x1 = x + w, z1 = z + h;
-        Vector3 n = dir.normal;
-
-        Vector3 p1 = new Vector3(x0, y0, z0);
-        Vector3 p2 = new Vector3(x0, y0, z1);
-        Vector3 p3 = new Vector3(x1, y0, z1);
-        Vector3 p4 = new Vector3(x1, y0, z0);
-
-        if (dir == Direction.DOWN) {
-            addFace(p1, p4, p3, p2, n);
-        } else {
-            addFace(p1, p2, p3, p4, n);
-        }
-    }
-
-    // ---- Helper: merge a mask on a Z‑slice at fixed z ----
-    private void mergeMaskZ(byte[][] mask, int z, Direction dir) {
-        int H = Chunk.SIZE, W = Chunk.SIZE;
-        for (int x = 0; x < H; x++) {
-            for (int y = 0; y < W; y++) {
-                byte type = mask[x][y];
-                if (type == 0) continue;
-
-                int w;
-                for (w = 1; y + w < W && mask[x][y + w] == type; w++) {}
-
-                int h = 1;
-                outer: for (; x + h < H; h++) {
-                    for (int k = 0; k < w; k++) {
-                        if (mask[x + h][y + k] != type) break outer;
-                    }
-                }
-
-                for (int dx = 0; dx < h; dx++)
-                    for (int dy = 0; dy < w; dy++)
-                        mask[x + dx][y + dy] = 0;
-
-                emitQuadZ(z, x, y, w, h, dir);
+    private void mergeMaskZ(byte[][] mask, int z, Vector3 normal) {
+        int dimX = mask.length;
+        int dimY = mask[0].length;
+        for(int x=0;x<dimX;x++){
+            for(int y=0;y<dimY;){
+                byte b = mask[x][y]; if(b==0){ y++; continue; }
+                int w=1; while(y+w<dimY && mask[x][y+w]==b) w++;
+                int h=1; outer: while(x+h<dimX){
+                    for(int k=0;k<w;k++) if(mask[x+h][y+k]!=b) break outer;
+                    h++; }
+                float z0 = z + (normal.z>0?1f:0f);
+                Vector3 p1=new Vector3(x,   y,   z0);
+                Vector3 p2=new Vector3(x+h, y,   z0);
+                Vector3 p3=new Vector3(x+h, y+w, z0);
+                Vector3 p4=new Vector3(x,   y+w, z0);
+                boolean top = (normal.y>0 && b==Chunk.GRASS);
+                addQuad(p1,p2,p3,p4, normal, top);
+                for(int dx=0;dx<h;dx++) for(int dy=0;dy<w;dy++) mask[x+dx][y+dy]=0;
+                y += w;
             }
         }
     }
 
-    private void emitQuadZ(int z, int x, int y, int w, int h, Direction dir) {
-        float z0 = (dir == Direction.SOUTH ? z + 1 : z);
-        float x0 = x,     y0 = y;
-        float x1 = x + w, y1 = y + h;
-        Vector3 n = dir.normal;
+    private void addQuad(Vector3 p1, Vector3 p2, Vector3 p3, Vector3 p4,
+                         Vector3 normal, boolean isTop) {
+        List<Float>  vBuf = isTop? grassVerts: soilVerts;
+        List<Short>  iBuf = isTop? grassIdx:  soilIdx;
+        short        idx  = isTop? grassIndex: soilIndex;
+        boolean flip = (normal.x + normal.y + normal.z) < 0;
+        // push helper
+        java.util.function.BiConsumer<Vector3,Vector3> push =
+            (pos,nrm)->{
+                vBuf.add(pos.x); vBuf.add(pos.y); vBuf.add(pos.z);
+                vBuf.add(nrm.x); vBuf.add(nrm.y); vBuf.add(nrm.z);
+            };
+        if(!flip){ push.accept(p1,normal); push.accept(p2,normal); push.accept(p3,normal);
+            push.accept(p3,normal); push.accept(p4,normal); push.accept(p1,normal);} else{
+            push.accept(p1,normal); push.accept(p4,normal); push.accept(p3,normal);
+            push.accept(p3,normal); push.accept(p2,normal); push.accept(p1,normal);}
+        for(int i=0;i<6;i++) iBuf.add((short)(idx + i));
+        if(isTop) grassIndex += 6; else soilIndex += 6;
+    }
 
-        Vector3 p1 = new Vector3(x0, y0, z0);
-        Vector3 p2 = new Vector3(x0, y1, z0);
-        Vector3 p3 = new Vector3(x1, y1, z0);
-        Vector3 p4 = new Vector3(x1, y0, z0);
-
-        if (dir == Direction.NORTH) {
-            addFace(p1, p4, p3, p2, n);
-        } else {
-            addFace(p1, p2, p3, p4, n);
-        }
+    private float[] toFloatArray(List<Float> list){
+        float[] arr = new float[list.size()];
+        for(int i=0;i<arr.length;i++) arr[i] = list.get(i);
+        return arr;
+    }
+    private short[] toShortArray(List<Short> list){
+        short[] arr = new short[list.size()];
+        for(int i=0;i<arr.length;i++) arr[i] = list.get(i);
+        return arr;
     }
 }

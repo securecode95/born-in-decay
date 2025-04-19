@@ -31,6 +31,9 @@ public class BornInDecay extends ApplicationAdapter {
 
     @Override
     public void create() {
+        Gdx.gl.glDisable(GL20.GL_CULL_FACE);
+        Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
+
         // ——— rendering setup ———
         spriteBatch   = new SpriteBatch();
         font          = new BitmapFont();
@@ -100,7 +103,8 @@ public class BornInDecay extends ApplicationAdapter {
     @Override
     public void render() {
         float deltaTime = Gdx.graphics.getDeltaTime();
-
+        Gdx.gl.glDisable(GL20.GL_CULL_FACE);
+        Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
         // 1) Update world geometry around the player
         worldManager.update(player.position);
 
