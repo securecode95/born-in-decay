@@ -1,3 +1,4 @@
+// core/src/main/java/com/rabalder/bornindecay/ChunkMeshBuilder.java
 package com.rabalder.bornindecay;
 
 import com.badlogic.gdx.graphics.Color;
@@ -17,122 +18,232 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ChunkMeshBuilder {
-    private static final int SIZE  = Chunk.SIZE;
-    private static final int VSIZE = 6; // x,y,z + nx,ny,nz
+    private static final int SIZE        = Chunk.SIZE;
+    private static final int VERTEX_SIZE = 6; // x,y,z + nx,ny,nz
 
     // per‐type vertex & index buffers
-    private final List<Float> grassV = new ArrayList<>();
-    private final List<Short> grassI = new ArrayList<>();
-    private final List<Float> dirtV  = new ArrayList<>();
-    private final List<Short> dirtI  = new ArrayList<>();
-    private final List<Float> stoneV = new ArrayList<>();
-    private final List<Short> stoneI = new ArrayList<>();
-    private short gBase, dBase, sBase;
+    private final List<Float>  grassVerts = new ArrayList<>();
+    private final List<Short>  grassIdx   = new ArrayList<>();
+    private short              grassBase  = 0;
 
+    private final List<Float>  dirtVerts  = new ArrayList<>();
+    private final List<Short>  dirtIdx    = new ArrayList<>();
+    private short              dirtBase   = 0;
+
+    private final List<Float>  stoneVerts = new ArrayList<>();
+    private final List<Short>  stoneIdx   = new ArrayList<>();
+    private short              stoneBase  = 0;
+
+    /** Builds a single ModelInstance containing greedy‑meshed grass, dirt, stone. */
     public ModelInstance buildChunkMesh(Chunk chunk) {
-        // clear
-        grassV.clear(); grassI.clear();
-        dirtV .clear(); dirtI .clear();
-        stoneV.clear(); stoneI.clear();
-        gBase = dBase = sBase = 0;
+        // clear all buffers
+        grassVerts.clear(); grassIdx.clear(); grassBase = 0;
+        dirtVerts.clear();  dirtIdx.clear();  dirtBase  = 0;
+        stoneVerts.clear(); stoneIdx.clear(); stoneBase = 0;
 
-        // emit one quad per exposed face
-        for (int x = 0; x < SIZE; x++) {
-            for (int y = 0; y < SIZE; y++) {
-                for (int z = 0; z < SIZE; z++) {
-                    byte id = chunk.getBlock(x, y, z);
-                    if (id == BlockType.AIR) continue;
-                    tryFace(chunk, x, y, z, +1,  0,  0);
-                    tryFace(chunk, x, y, z, -1,  0,  0);
-                    tryFace(chunk, x, y, z,  0, +1,  0);
-                    tryFace(chunk, x, y, z,  0, -1,  0);
-                    tryFace(chunk, x, y, z,  0,  0, +1);
-                    tryFace(chunk, x, y, z,  0,  0, -1);
-                }
-            }
+        // 1) X slices – east + west faces
+        for (int x = 0; x <= SIZE; x++) {
+            byte[][] mask = buildMaskX(chunk, x);
+            mergeMaskX(mask, x, new Vector3(+1,0,0), false);
+            mergeMaskX(mask, x, new Vector3(-1,0,0), false);
         }
 
-        // build Meshes
-        Mesh grassM = buildMesh(grassV, grassI);
-        Mesh dirtM  = buildMesh(dirtV,  dirtI);
-        Mesh stoneM = buildMesh(stoneV, stoneI);
+        // 2) Y slices – up (+grass top) + down faces
+        for (int y = 0; y <= SIZE; y++) {
+            byte[][] mask = buildMaskY(chunk, y);
+            mergeMaskY(mask, y, new Vector3(0,+1,0), true);  // grass‑tops
+            mergeMaskY(mask, y, new Vector3(0,-1,0), false); // dirt/stone bottoms
+        }
 
-        // compose Materials (diffuse + disable culling)
-        Material mGrass = new Material(
-            ColorAttribute.createDiffuse(new Color(0.13f,0.55f,0.13f,1f)),
-            IntAttribute.createCullFace(GL20.GL_NONE)
-        );
-        Material mDirt = new Material(
-            ColorAttribute.createDiffuse(new Color(0.60f,0.40f,0.20f,1f)),
-            IntAttribute.createCullFace(GL20.GL_NONE)
-        );
-        Material mStone = new Material(
-            ColorAttribute.createDiffuse(new Color(0.50f,0.50f,0.50f,1f)),
-            IntAttribute.createCullFace(GL20.GL_NONE)
-        );
+        // 3) Z slices – north + south faces
+        for (int z = 0; z <= SIZE; z++) {
+            byte[][] mask = buildMaskZ(chunk, z);
+            mergeMaskZ(mask, z, new Vector3(0,0,+1), false);
+            mergeMaskZ(mask, z, new Vector3(0,0,-1), false);
+        }
 
-        // bake into a single ModelInstance
+        // build three meshes
+        Mesh grassM = buildMesh(grassVerts, grassIdx);
+        Mesh dirtM  = buildMesh(dirtVerts,  dirtIdx);
+        Mesh stoneM = buildMesh(stoneVerts, stoneIdx);
+
+        // materials
+        Material matG = new Material(ColorAttribute.createDiffuse(Color.GREEN));
+        Material matD = new Material(ColorAttribute.createDiffuse(new Color(0.6f,0.4f,0.2f,1f)));
+        Material matS = new Material(ColorAttribute.createDiffuse(Color.GRAY));
+        IntAttribute noCull = IntAttribute.createCullFace(GL20.GL_NONE);
+
+        // bake into single Model
         ModelBuilder mb = new ModelBuilder();
         mb.begin();
-        if (!grassI.isEmpty()) mb.part("grass", grassM, GL20.GL_TRIANGLES, mGrass);
-        if (!dirtI .isEmpty()) mb.part("dirt",  dirtM,  GL20.GL_TRIANGLES, mDirt);
-        if (!stoneI.isEmpty()) mb.part("stone", stoneM, GL20.GL_TRIANGLES, mStone);
+        if (!grassIdx.isEmpty()) mb.part("grass", grassM, GL20.GL_TRIANGLES, matG);
+        if (!dirtIdx.isEmpty())  mb.part("dirt",  dirtM,  GL20.GL_TRIANGLES, matD);
+        if (!stoneIdx.isEmpty()) mb.part("stone", stoneM, GL20.GL_TRIANGLES, matS);
         Model model = mb.end();
 
         return new ModelInstance(model);
     }
 
-    private void tryFace(Chunk c, int x,int y,int z, int dx,int dy,int dz) {
-        if (c.getBlock(x+dx, y+dy, z+dz) != BlockType.AIR) return;
-        byte id = c.getBlock(x, y, z);
-
-        Vector3 n = new Vector3(dx,dy,dz);
-        Vector3 p0 = new Vector3(x,   y,   z);
-        Vector3 u  = new Vector3((dy!=0?1:0),(dz!=0?1:0),(dx!=0?1:0));
-        Vector3 v  = new Vector3((dz!=0?1:0),(dx!=0?1:0),(dy!=0?1:0));
-
-        Vector3 p1 = new Vector3(p0).add(u);
-        Vector3 p2 = new Vector3(p0).add(u).add(v);
-        Vector3 p3 = new Vector3(p0).add(v);
-
-        emit(id, p0, p1, p2, p3, n);
+    // —————————————————————————————
+    // Extract a 2D [SIZE×SIZE] slice at x
+    private byte[][] buildMaskX(Chunk c, int x) {
+        byte[][] mask = new byte[SIZE][SIZE];
+        for (int y=0; y<SIZE; y++)
+            for (int z=0; z<SIZE; z++)
+                mask[y][z] = c.getBlock(x, y, z);
+        return mask;
+    }
+    // at y
+    private byte[][] buildMaskY(Chunk c, int y) {
+        byte[][] mask = new byte[SIZE][SIZE];
+        for (int x=0; x<SIZE; x++)
+            for (int z=0; z<SIZE; z++)
+                mask[x][z] = c.getBlock(x, y, z);
+        return mask;
+    }
+    // at z
+    private byte[][] buildMaskZ(Chunk c, int z) {
+        byte[][] mask = new byte[SIZE][SIZE];
+        for (int x=0; x<SIZE; x++)
+            for (int y=0; y<SIZE; y++)
+                mask[x][y] = c.getBlock(x, y, z);
+        return mask;
     }
 
-    private void emit(byte id,
-                      Vector3 p1,Vector3 p2,Vector3 p3,Vector3 p4,
-                      Vector3 n)
+    // —————————————————————————————
+    // Greedy‐merge on X
+    private void mergeMaskX(byte[][] mask, int x, Vector3 normal, boolean isTopFace) {
+        int hDim = mask.length, wDim = mask[0].length;
+        for (int y=0; y<hDim; y++) {
+            for (int z=0; z<wDim; ) {
+                byte id = mask[y][z];
+                if (id == BlockType.AIR) { z++; continue; }
+                // width
+                int w=1; while (z+w<wDim && mask[y][z+w]==id) w++;
+                // height
+                int h=1; outer: while (y+h<hDim) {
+                    for (int k=0; k<w; k++) if (mask[y+h][z+k]!=id) break outer;
+                    h++;
+                }
+                // quad corners
+                float x0 = x + (normal.x>0?1f:0f),
+                    y0 = y,        z0 = z,
+                    y1 = y + h,    z1 = z + w;
+                Vector3 p1 = new Vector3(x0,y0,z0),
+                    p2 = new Vector3(x0,y1,z0),
+                    p3 = new Vector3(x0,y1,z1),
+                    p4 = new Vector3(x0,y0,z1);
+                addQuad(id, p1,p2,p3,p4, normal, isTopFace);
+
+                // zero out
+                for (int dy=0; dy<h; dy++)
+                    for (int dz=0; dz<w; dz++)
+                        mask[y+dy][z+dz] = BlockType.AIR;
+                z += w;
+            }
+        }
+    }
+
+    // Greedy‐merge on Y
+    private void mergeMaskY(byte[][] mask, int y, Vector3 normal, boolean isTopFace) {
+        int hDim = mask.length, wDim = mask[0].length;
+        for (int x=0; x<hDim; x++) {
+            for (int z=0; z<wDim; ) {
+                byte id = mask[x][z];
+                if (id == BlockType.AIR) { z++; continue; }
+                int w=1; while (z+w<wDim && mask[x][z+w]==id) w++;
+                int h=1; outer: while (x+h<hDim) {
+                    for (int k=0; k<w; k++) if (mask[x+h][z+k]!=id) break outer;
+                    h++;
+                }
+                float x0 = x,       z0 = z,
+                    x1 = x+h,     z1 = z+w,
+                    y0 = y + (normal.y>0?1f:0f);
+                Vector3 p1 = new Vector3(x0,y0,z0),
+                    p2 = new Vector3(x1,y0,z0),
+                    p3 = new Vector3(x1,y0,z1),
+                    p4 = new Vector3(x0,y0,z1);
+                addQuad(id, p1,p2,p3,p4, normal, isTopFace);
+                for (int dx=0; dx<h; dx++)
+                    for (int dz=0; dz<w; dz++)
+                        mask[x+dx][z+dz] = BlockType.AIR;
+                z += w;
+            }
+        }
+    }
+
+    // Greedy‐merge on Z
+    private void mergeMaskZ(byte[][] mask, int z, Vector3 normal, boolean isTopFace) {
+        int hDim = mask.length, wDim = mask[0].length;
+        for (int x=0; x<hDim; x++) {
+            for (int y=0; y<wDim; ) {
+                byte id = mask[x][y];
+                if (id == BlockType.AIR) { y++; continue; }
+                int w=1; while (y+w<wDim && mask[x][y+w]==id) w++;
+                int h=1; outer: while (x+h<hDim) {
+                    for (int k=0; k<w; k++) if (mask[x+h][y+k]!=id) break outer;
+                    h++;
+                }
+                float x0 = x,       y0 = y,
+                    x1 = x+h,     y1 = y+w,
+                    z0 = z + (normal.z>0?1f:0f);
+                Vector3 p1 = new Vector3(x0,y0,z0),
+                    p2 = new Vector3(x1,y0,z0),
+                    p3 = new Vector3(x1,y1,z0),
+                    p4 = new Vector3(x0,y1,z0);
+                addQuad(id, p1,p2,p3,p4, normal, isTopFace);
+                for (int dx=0; dx<h; dx++)
+                    for (int dy=0; dy<w; dy++)
+                        mask[x+dx][y+dy] = BlockType.AIR;
+                y += w;
+            }
+        }
+    }
+
+    // Emit one 2‑triangle quad into the correct per‑type buffer
+    private void addQuad(byte id,
+                         Vector3 p1,Vector3 p2,Vector3 p3,Vector3 p4,
+                         Vector3 n, boolean isTopFace)
     {
         List<Float>  vBuf; List<Short> iBuf; short base;
-        if (id==BlockType.GRASS)      { vBuf=grassV; iBuf=grassI; base=gBase; }
-        else if (id==BlockType.DIRT)  { vBuf=dirtV;  iBuf=dirtI;  base=dBase; }
-        else                           { vBuf=stoneV; iBuf=stoneI; base=sBase; }
+        // choose buffer by block type & top‑face flag
+        if (isTopFace && id==BlockType.GRASS)      { vBuf=grassVerts; iBuf=grassIdx; base=grassBase; }
+        else if (id==BlockType.GRASS)              { vBuf=dirtVerts;  iBuf=dirtIdx;  base=dirtBase;  }
+        else if (id==BlockType.DIRT)               { vBuf=dirtVerts;  iBuf=dirtIdx;  base=dirtBase;  }
+        else /*ST O NE*/                           { vBuf=stoneVerts; iBuf=stoneIdx; base=stoneBase; }
 
-        boolean flip = (n.x+n.y+n.z) < 0;
+        boolean flip = (n.x + n.y + n.z) < 0;
         Vector3[] quad = flip
             ? new Vector3[]{p1,p4,p3,p3,p2,p1}
             : new Vector3[]{p1,p2,p3,p3,p4,p1};
 
-        for (Vector3 p : quad) {
-            vBuf.add(p.x); vBuf.add(p.y); vBuf.add(p.z);
+        // add vertices (pos + normal)
+        for (Vector3 v : quad) {
+            vBuf.add(v.x); vBuf.add(v.y); vBuf.add(v.z);
             vBuf.add(n.x); vBuf.add(n.y); vBuf.add(n.z);
         }
-        for (short i=0; i<6; i++) iBuf.add((short)(base+i));
+        // add indices
+        for (short i=0; i<6; i++) iBuf.add((short)(base + i));
 
-        if      (id==BlockType.GRASS) gBase += 6;
-        else if (id==BlockType.DIRT)  dBase += 6;
-        else                           sBase += 6;
+        // bump base counters
+        if      (isTopFace && id==BlockType.GRASS) grassBase += 6;
+        else if (id==BlockType.GRASS || id==BlockType.DIRT) dirtBase  += 6;
+        else                                         stoneBase += 6;
     }
 
-    private Mesh buildMesh(List<Float> v, List<Short> i) {
-        if (i.isEmpty()) return new Mesh(true,0,0);
-        Mesh m = new Mesh(true, v.size()/VSIZE, i.size(),
-            new VertexAttribute(Usage.Position,3,"a_position"),
-            new VertexAttribute(Usage.Normal,  3,"a_normal")
+    // Build a Mesh from raw floats & shorts
+    private Mesh buildMesh(List<Float> verts, List<Short> idx) {
+        if (idx.isEmpty()) return new Mesh(true, 0, 0);
+        Mesh m = new Mesh(true,
+            verts.size()/VERTEX_SIZE,
+            idx .size(),
+            new VertexAttribute(Usage.Position, 3, "a_position"),
+            new VertexAttribute(Usage.Normal,   3, "a_normal")
         );
-        float[] fv = new float[v.size()];
-        for (int j=0; j<fv.length; j++) fv[j] = v.get(j);
-        short[] si = new short[i.size()];
-        for (int j=0; j<si.length; j++) si[j] = i.get(j);
+        float[]  fv = new float [verts.size()];
+        short[] si = new short[idx .size()];
+        for (int i=0; i<fv.length; i++) fv[i] = verts.get(i);
+        for (int i=0; i<si.length; i++) si[i] = idx .get(i);
         m.setVertices(fv);
         m.setIndices(si);
         return m;
