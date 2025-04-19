@@ -2,6 +2,7 @@ package com.rabalder.bornindecay;
 
 import com.badlogic.gdx.graphics.*;
 import com.badlogic.gdx.graphics.VertexAttributes.Usage;
+import com.badlogic.gdx.graphics.g3d.attributes.IntAttribute;
 import com.badlogic.gdx.math.Vector3;
 import com.badlogic.gdx.graphics.g3d.ModelInstance;
 import com.badlogic.gdx.graphics.g3d.Model;
@@ -31,6 +32,7 @@ public class ChunkMeshBuilder {
         addVertex(p3, normal);
         addVertex(p4, normal);
         addVertex(p1, normal);
+        
     }
 
     private void addVertex(Vector3 pos, Vector3 normal) {
@@ -68,7 +70,7 @@ public class ChunkMeshBuilder {
         mesh.setIndices(indArray);
 
         // 3) bake the Mesh into a Model
-        Material mat = new Material(ColorAttribute.createDiffuse(Color.WHITE));
+        Material mat = new Material(ColorAttribute.createDiffuse(Color.WHITE),IntAttribute.createCullFace(GL20.GL_NONE));
         ModelBuilder mb = new ModelBuilder();
         mb.begin();
         mb.part("chunk", mesh, GL20.GL_TRIANGLES, mat);
@@ -164,7 +166,7 @@ public class ChunkMeshBuilder {
         // 3) Build the low‑level Mesh and bake into a ModelInstance
         ChunkMesh chunkMesh = build();          // build() now returns your greedy‑meshed ChunkMesh
         Mesh mesh           = chunkMesh.mesh;   // extract the Mesh
-        Material mat        = new Material(ColorAttribute.createDiffuse(Color.WHITE));
+        Material mat        = new Material(ColorAttribute.createDiffuse(Color.WHITE),IntAttribute.createCullFace(GL20.GL_NONE));
 
         ModelBuilder mb = new ModelBuilder();
         mb.begin();
