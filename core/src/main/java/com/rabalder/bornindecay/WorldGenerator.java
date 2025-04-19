@@ -1,3 +1,4 @@
+// WorldGenerator.java
 package com.rabalder.bornindecay;
 
 import com.badlogic.gdx.graphics.g3d.ModelInstance;
@@ -6,122 +7,66 @@ import com.badlogic.gdx.math.Vector3;
 
 import java.util.*;
 
-/**
- * Generates and maintains chunks, their greedy‑meshed ModelInstances,
- * and provides a list of non‑AIR voxel positions for collision.
- */
+/** Procedurally fills each chunk with stone at the bottom, soil in the middle, and a grass roof */
 public class WorldGenerator {
-    private final Map<Vector2, Chunk> activeChunks = new HashMap<>();
-    private final Map<Vector2, ModelInstance> chunkMeshes = new HashMap<>();
-
-    private final OpenSimplexNoise noise;
+    private final Map<Vector2,Chunk>       activeChunks = new HashMap<>();
+    private final Map<Vector2,ModelInstance> chunkMeshes = new HashMap<>();
+    private final OpenSimplexNoise noise = new OpenSimplexNoise();
     private final long seed;
-    private final int viewDistance = 2;
+    private final int viewDistance   = 2;
     private final int maxTerrainHeight = 8;
 
     public WorldGenerator(long seed) {
-        this.seed  = seed;
-        this.noise = new OpenSimplexNoise();
+        this.seed = seed;
     }
 
-    /**
-     * Call each frame with the player’s world‑space position.
-     * Generates new chunks in view, greedy‑meshes them, and
-     * stores the ModelInstance back onto the Chunk for rendering.
-     */
-    public void update(Vector3 playerPosition) {
-        int currentChunkX = (int)Math.floor(playerPosition.x / Chunk.SIZE);
-        int currentChunkZ = (int)Math.floor(playerPosition.z / Chunk.SIZE);
+    /** call every frame with the player’s world‐space position */
+    public void update(Vector3 playerPos) {
+        int cx = (int)Math.floor(playerPos.x / Chunk.SIZE);
+        int cz = (int)Math.floor(playerPos.z / Chunk.SIZE);
+        Set<Vector2> needed = new HashSet<>();
 
-        Set<Vector2> required = new HashSet<>();
-        for (int dx = -viewDistance; dx <= viewDistance; dx++) {
-            for (int dz = -viewDistance; dz <= viewDistance; dz++) {
-                int chunkX = currentChunkX + dx;
-                int chunkZ = currentChunkZ + dz;
-                Vector2 coord = new Vector2(chunkX, chunkZ);
-                required.add(coord);
-
+        for (int dx=-viewDistance; dx<=viewDistance; dx++) {
+            for (int dz=-viewDistance; dz<=viewDistance; dz++) {
+                Vector2 coord = new Vector2(cx+dx, cz+dz);
+                needed.add(coord);
                 if (!activeChunks.containsKey(coord)) {
-                    // 1) generate raw blocks
-                    Chunk newChunk = generateChunk(chunkX, chunkZ);
-                    activeChunks.put(coord, newChunk);
-
-                    // 2) greedy‑mesh into a ModelInstance
-                    ChunkMeshBuilder builder = new ChunkMeshBuilder();
-                    ModelInstance mesh = builder.buildChunkMesh(newChunk);
-                    chunkMeshes.put(coord, mesh);
-
-                    // 3) hook it back onto the chunk so WorldManager finds it
-                    newChunk.meshInstance = mesh;
+                    Chunk c = generateChunk(cx+dx, cz+dz);
+                    activeChunks.put(coord, c);
+                    ModelInstance mi = new ChunkMeshBuilder().buildChunkMesh(c);
+                    chunkMeshes.put(coord, mi);
                 }
             }
         }
 
-        // unload chunks that moved out of view
-        Iterator<Vector2> it = activeChunks.keySet().iterator();
-        while (it.hasNext()) {
-            Vector2 coord = it.next();
-            if (!required.contains(coord)) {
-                it.remove();
-                chunkMeshes.remove(coord);
-            }
-        }
+        // unload far chunks
+        activeChunks.keySet().removeIf(k -> !needed.contains(k));
+        chunkMeshes.keySet().removeIf(k -> !needed.contains(k));
     }
 
     private Chunk generateChunk(int chunkX, int chunkZ) {
-        Chunk chunk = new Chunk();
-        for (int x = 0; x < Chunk.SIZE; x++) {
-            for (int z = 0; z < Chunk.SIZE; z++) {
-                int worldX = chunkX * Chunk.SIZE + x;
-                int worldZ = chunkZ * Chunk.SIZE + z;
-                double n = OpenSimplexNoise.noise2(seed, worldX * 0.1, worldZ * 0.1);
-                int height = (int)(n * maxTerrainHeight + maxTerrainHeight / 2f);
-                height = Math.min(height, Chunk.SIZE - 1);
+        Chunk c = new Chunk();
+        for (int x=0; x<Chunk.SIZE; x++) {
+            for (int z=0; z<Chunk.SIZE; z++) {
+                int wx = chunkX*Chunk.SIZE + x;
+                int wz = chunkZ*Chunk.SIZE + z;
+                double n = OpenSimplexNoise.noise2(seed, wx*0.1, wz*0.1);
+                int h = (int)(n*maxTerrainHeight + maxTerrainHeight/2f);
+                h = Math.min(Math.max(h,0), Chunk.SIZE-1);
 
-                for (int y = 0; y <= height; y++) {
-                    byte type = (y == height) ? Chunk.GRASS : Chunk.SOIL;
-                    chunk.setBlock(x, y, z, type);
+                for (int y=0; y<=h; y++) {
+                    byte type;
+                    if (y == h)                type = BlockType.GRASS;
+                    else if (y < 2)           type = BlockType.STONE;
+                    else                       type = BlockType.SOIL;
+                    c.setBlock(x, y, z, type);
                 }
             }
         }
-        return chunk;
+        return c;
     }
 
-    /** Returns the list of all chunk ModelInstances for rendering. */
     public List<ModelInstance> getVisibleChunks() {
         return new ArrayList<>(chunkMeshes.values());
-    }
-
-    /** Returns the active chunks themselves (if you need them). */
-    public Collection<Chunk> getActiveChunks() {
-        return activeChunks.values();
-    }
-
-    /**
-     * Returns world‐space centers of every non‐AIR voxel
-     * in all active chunks. Used for precise collision.
-     */
-    public List<Vector3> getCollisionVoxels() {
-        List<Vector3> voxels = new ArrayList<>();
-        for (Map.Entry<Vector2,Chunk> e : activeChunks.entrySet()) {
-            int chunkX = (int)e.getKey().x;
-            int chunkZ = (int)e.getKey().y;
-            Chunk c = e.getValue();
-            for (int x = 0; x < Chunk.SIZE; x++) {
-                for (int y = 0; y < Chunk.SIZE; y++) {
-                    for (int z = 0; z < Chunk.SIZE; z++) {
-                        if (c.blocks[x][y][z] != Chunk.AIR) {
-                            // center of this voxel in world coordinates
-                            voxels.add(new Vector3(
-                                chunkX*Chunk.SIZE + x + 0.5f,
-                                y + 0.5f,
-                                chunkZ*Chunk.SIZE + z + 0.5f
-                            ));
-                        }
-                    }
-                }
-            }
-        }
-        return voxels;
     }
 }
