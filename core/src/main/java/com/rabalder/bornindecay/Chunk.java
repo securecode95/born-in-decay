@@ -26,6 +26,12 @@ public class Chunk {
         }
     }
 
+    public boolean inBounds(int x, int y, int z) {
+        return x >= 0 && x < SIZE
+            && y >= 0 && y < SIZE
+            && z >= 0 && z < SIZE;
+    }
+
     // Method to set a block at a given position to a specified type
     public void setBlock(int x, int y, int z, byte type) {
         if (x >= 0 && x < SIZE && y >= 0 && y < SIZE && z >= 0 && z < SIZE) {
