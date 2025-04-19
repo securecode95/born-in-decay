@@ -1,58 +1,42 @@
 package com.rabalder.bornindecay;
 
-import com.badlogic.gdx.math.Vector3;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
-import java.util.Random;
+import java.util.Map;
 
-/** Simple heightmap + stone below. */
 public class WorldGenerator {
     private final long seed;
-    private final Random rnd;
-    private final List<Chunk> chunks = new ArrayList<>();
+    private final Map<Long, Chunk> chunks = new HashMap<>();
 
     public WorldGenerator(long seed) {
         this.seed = seed;
-        this.rnd  = new Random(seed);
     }
 
-    public List<Chunk> getLoadedChunks() {
-        return chunks;
-    }
+    /**
+     * Ensure all chunks within `radius` of the player (px,pz) are generated.
+     */
+    public void update(float px, float pz, int radius) {
+        // which chunk the player is in
+        int cx = (int)Math.floor(px / Chunk.SIZE);
+        int cz = (int)Math.floor(pz / Chunk.SIZE);
 
-    public void generateAt(int cx, int cz) {
-        // one flat chunk at origin only:
-        chunks.clear();
-        Chunk c = new Chunk();
-        for (int x=0; x<Chunk.SIZE; x++) {
-            for (int z=0; z<Chunk.SIZE; z++) {
-                // simple hill:
-                float h = 8 + 4 * (float)Math.sin((x+cx*16)*.2)*.5f;
-                int height = 4 + (int)h;
-                for (int y=0; y<height; y++) {
-                    c.setBlock(x,y,z,
-                        y==height-1 ? BlockType.GRASS
-                            : y>2          ? BlockType.DIRT
-                            : BlockType.STONE);
+        for (int dx = -radius; dx <= radius; dx++) {
+            for (int dz = -radius; dz <= radius; dz++) {
+                // final per‑iteration coords, so no lambda capture issue:
+                int fx = cx + dx;
+                int fz = cz + dz;
+                long key = (((long)fx) << 32) | (fz & 0xffffffffL);
+
+                if (!chunks.containsKey(key)) {
+                    chunks.put(key, new Chunk(seed, fx, fz));
                 }
             }
         }
-        chunks.add(c);
     }
 
-    /** Produce a flat list of world‐space collision voxels. */
-    public List<Vector3> getCollisionVoxels() {
-        List<Vector3> out = new ArrayList<>();
-        for (int i=0; i<chunks.size(); i++) {
-            Chunk c = chunks.get(i);
-            for (int x=0; x<Chunk.SIZE; x++)
-                for (int y=0; y<Chunk.SIZE; y++)
-                    for (int z=0; z<Chunk.SIZE; z++) {
-                        if (c.getBlock(x,y,z)!=BlockType.AIR) {
-                            out.add(new Vector3(x, y, z));
-                        }
-                    }
-        }
-        return out;
+    /** Returns all currently loaded chunks. */
+    public List<Chunk> getLoadedChunks() {
+        return new ArrayList<>(chunks.values());
     }
 }
