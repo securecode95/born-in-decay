@@ -51,7 +51,7 @@ public class BornInDecay extends ApplicationAdapter {
         environment.add(new DirectionalLight().set(Color.WHITE, -1f,-0.8f,-0.2f));
 
         // ——— world & player setup ———
-        worldManager = new WorldManager(Materials.GRASSY_BLOCK_MODEL, Materials.DECAYED_SOIL_MODEL);
+        worldManager=new WorldManager();
         player       = new PlayerController();
         player.resetLook();
 
@@ -104,39 +104,36 @@ public class BornInDecay extends ApplicationAdapter {
     @Override
     public void render() {
         float deltaTime = Gdx.graphics.getDeltaTime();
-        Gdx.gl.glDisable(GL20.GL_CULL_FACE);
-        Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
-        // 1) Update world geometry around the player
+
+        // —– 1) Update world around the player —–
         worldManager.update(player.position);
 
-        // 2) Gather what to render and what to collide against
-        List<ModelInstance> visibleChunks   = worldManager.getChunkMeshes();
-        List<Vector3>       collisionVoxels = worldManager.getCollisionVoxels();
+        // —– 2) Grab the models & collision voxels —–
+        List<ModelInstance> chunks = worldManager.getChunkMeshes();
+        List<Vector3>       col    = worldManager.getCollisionVoxels();
 
-        // 3) Tell the player to move/collide against the voxels
-        player.update(camera, deltaTime, collisionVoxels);
+        // —– 3) Move the player, resolving collisions —–
+        //    (feeds your physics/controller the up‑to‑date block list)
+        player.update(camera, deltaTime, col);
 
-        // 4) Raycast & highlight the targeted block
-        ModelInstance targetBlock = RaycastUtil.getTargetedBlock(camera, visibleChunks, 6f);
-        highlightVisible = (targetBlock != null);
-        if (highlightVisible) {
-            Vector3 targetPos = targetBlock.transform.getTranslation(new Vector3());
-            highlightInstance.transform.setToTranslation(targetPos);
-        }
+        // —– 4) (Optional) Raycast & highlight code here…
 
-        // 5) Draw all instances
-        Gdx.gl.glViewport(0, 0, Gdx.graphics.getWidth(), Gdx.graphics.getHeight());
-        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT | GL20.GL_DEPTH_BUFFER_BIT);
+        // —– 5) Draw the world —–
+        // a) set GL state
+        Gdx.gl.glDisable(GL20.GL_CULL_FACE);
+        Gdx.gl.glEnable (GL20.GL_DEPTH_TEST);
 
+        // b) clear the screen
+        Gdx.gl.glViewport(0,0,Gdx.graphics.getWidth(),Gdx.graphics.getHeight());
+        Gdx.gl.glClear(GL20.GL_COLOR_BUFFER_BIT|GL20.GL_DEPTH_BUFFER_BIT);
+
+        // c) begin your 3D batch and render each chunk
         modelBatch.begin(camera);
-        if (highlightVisible) {
-            modelBatch.render(highlightInstance, environment);
-        }
-        for (ModelInstance chunkMesh : visibleChunks) {
-            modelBatch.render(chunkMesh, environment);
+        for (ModelInstance mi : chunks) {
+            modelBatch.render(mi, environment);
         }
         modelBatch.end();
-
+        
         // 6) Draw crosshair and FPS
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         shapeRenderer.setColor(Color.WHITE);
