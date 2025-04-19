@@ -133,7 +133,7 @@ public class BornInDecay extends ApplicationAdapter {
             modelBatch.render(mi, environment);
         }
         modelBatch.end();
-        
+
         // 6) Draw crosshair and FPS
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         shapeRenderer.setColor(Color.WHITE);
