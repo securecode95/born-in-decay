@@ -56,7 +56,7 @@ public class WorldGenerator {
     public List<ModelInstance> getVisibleChunks() {
         return new ArrayList<>(meshes.values());
     }
-    
+
     public List<Vector3> getCollisionVoxels() {
         List<Vector3> vox=new ArrayList<>();
         for (var e:chunks.entrySet()) {
