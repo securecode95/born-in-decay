@@ -69,9 +69,9 @@ public class BornInDecay extends ApplicationAdapter {
         worldManager.update(player.position);
 
         // Get all visible chunk meshes after greedy meshing is applied
-        List<ModelInstance> visibleChunks = worldManager.getChunkMeshes(); // This should return the chunk meshes
-
-        player.update(camera, deltaTime, visibleChunks);
+        List<ModelInstance> visibleChunks  = worldManager.getChunkMeshes();
+        List<Vector3>    collisionVoxels = worldManager.getCollisionVoxels();
+        player.update(camera, deltaTime, collisionVoxels);
 
         // 🎯 Highlight block (This should remain the same for block interaction)
         ModelInstance targetBlock = RaycastUtil.getTargetedBlock(camera, visibleChunks, 6f);

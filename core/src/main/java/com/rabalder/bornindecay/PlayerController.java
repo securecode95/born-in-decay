@@ -3,135 +3,126 @@ package com.rabalder.bornindecay;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
 import com.badlogic.gdx.graphics.PerspectiveCamera;
-import com.badlogic.gdx.graphics.g3d.ModelInstance;
 import com.badlogic.gdx.math.Vector3;
+
 import java.util.List;
-import java.util.ArrayList;
 
 public class PlayerController {
     public Vector3 position = new Vector3(8f, 2.5f, 8f);
     public Vector3 velocity = new Vector3();
 
-    private float yaw = -90f;
+    private float yaw  = -90f;
     private float pitch = 0f;
-    private float moveSpeed = 8f;
-    private float gravity = -18f;
-    private float jumpSpeed = 8.5f;
-    private boolean onGround = false;
-
+    private float moveSpeed   = 8f;
+    private float gravity     = -18f;
+    private float jumpSpeed   = 8.5f;
+    private boolean onGround  = false;
     private final float mouseSensitivity = 0.2f;
 
-    public void update(PerspectiveCamera camera, float delta, List<ModelInstance> blocks) {
-        // Mouse movement
-        float deltaX = Gdx.input.getDeltaX() * mouseSensitivity;
-        float deltaY = -Gdx.input.getDeltaY() * mouseSensitivity;
-
-        yaw += deltaX;
-        pitch += deltaY;
+    /**
+     * @param voxels List of world‐space centers of each solid voxel.
+     */
+    public void update(PerspectiveCamera camera, float delta, List<Vector3> voxels) {
+        // --- handle mouse look ---
+        float dX = Gdx.input.getDeltaX() * mouseSensitivity;
+        float dY = -Gdx.input.getDeltaY() * mouseSensitivity;
+        yaw   += dX;
+        pitch += dY;
         pitch = Math.max(-89f, Math.min(89f, pitch));
 
         Vector3 look = getLookDirection();
 
-        // Apply camera position and direction
+        // update camera
         camera.position.set(position.x, position.y + 0.6f, position.z);
         camera.direction.set(look);
         camera.update();
 
-        // Movement input
-        Vector3 forward = new Vector3(look).set(look.x, 0, look.z).nor(); // horizontal movement only
-        Vector3 right = new Vector3(forward).crs(Vector3.Y).nor();
-        Vector3 move = new Vector3();
-
+        // --- handle WASD ---
+        Vector3 forward = new Vector3(look).set(look.x, 0, look.z).nor();
+        Vector3 right   = new Vector3(forward).crs(Vector3.Y).nor();
+        Vector3 move    = new Vector3();
         if (Gdx.input.isKeyPressed(Input.Keys.W)) move.add(forward);
         if (Gdx.input.isKeyPressed(Input.Keys.S)) move.sub(forward);
         if (Gdx.input.isKeyPressed(Input.Keys.A)) move.sub(right);
         if (Gdx.input.isKeyPressed(Input.Keys.D)) move.add(right);
-
-        if (Gdx.input.isKeyJustPressed(Input.Keys.SPACE)) {
-            System.out.println("Spacebar pressed");
-        }
-
         move.nor().scl(moveSpeed);
+
+        // store horizontal into velocity
         velocity.x = move.x;
         velocity.z = move.z;
 
-        // Apply gravity
+        // --- gravity ---
         velocity.y += gravity * delta;
 
-        // Predict next position
+        // predict next position
         Vector3 nextPos = new Vector3(position).mulAdd(velocity, delta);
 
-        // Attempt to move to next position
-        if (!isColliding(nextPos, blocks)) {
+        // --- collision ---
+        if (!isColliding(nextPos, voxels)) {
             position.set(nextPos);
         } else {
-            // Try horizontal only
-            Vector3 testXZ = new Vector3(position.x + velocity.x * delta, position.y, position.z + velocity.z * delta);
-            if (!isColliding(testXZ, blocks)) {
+            // try XZ only
+            Vector3 testXZ = new Vector3(position.x + velocity.x * delta,
+                position.y,
+                position.z + velocity.z * delta);
+            if (!isColliding(testXZ, voxels)) {
                 position.x = testXZ.x;
                 position.z = testXZ.z;
             }
-
-            // Try vertical only
-            Vector3 testY = new Vector3(position.x, position.y + velocity.y * delta, position.z);
-            if (!isColliding(testY, blocks)) {
+            // try Y only
+            Vector3 testY = new Vector3(position.x,
+                position.y + velocity.y * delta,
+                position.z);
+            if (!isColliding(testY, voxels)) {
                 position.y = testY.y;
             } else {
                 velocity.y = 0;
             }
         }
 
-// Ground detection after movement is resolved
+        // --- ground check ---
         onGround = false;
         Vector3 below = new Vector3(position.x, position.y - 0.1f, position.z);
-
-        for (ModelInstance block : blocks) {
-            Vector3 bp = block.transform.getTranslation(new Vector3());
-            if (
-                below.x > bp.x - 0.5f && below.x < bp.x + 0.5f &&
-                    below.z > bp.z - 0.5f && below.z < bp.z + 0.5f &&
-                    Math.abs(below.y - (bp.y + 1.0f)) <= 0.1f
-            ) {
+        for (Vector3 center : voxels) {
+            if (below.x > center.x - 0.5f && below.x < center.x + 0.5f &&
+                below.z > center.z - 0.5f && below.z < center.z + 0.5f &&
+                Math.abs(below.y - (center.y + 0.5f)) <= 0.1f) {
                 onGround = true;
                 break;
             }
         }
 
-
-
-        // Jump logic (after confirming grounded)
+        // --- jump ---
         if (onGround && Gdx.input.isKeyJustPressed(Input.Keys.SPACE)) {
             velocity.y = jumpSpeed;
-            onGround = false;
+            onGround   = false;
         }
     }
 
-    private boolean isColliding(Vector3 pos, List<ModelInstance> blocks)
-    {
-        float size = 0.4f;
-        for (ModelInstance block : blocks) {
-            Vector3 bp = block.transform.getTranslation(new Vector3());
-            if (
-                pos.x + size > bp.x - 0.5f && pos.x - size < bp.x + 0.5f &&
-                    pos.y < bp.y + 1.0f && pos.y > bp.y - 0.1f &&
-                    pos.z + size > bp.z - 0.5f && pos.z - size < bp.z + 0.5f
-            ) {
+    /** AABB vs. block tests */
+    private boolean isColliding(Vector3 pos, List<Vector3> voxels) {
+        float r = 0.4f;
+        for (Vector3 center : voxels) {
+            if (pos.x + r > center.x - 0.5f && pos.x - r < center.x + 0.5f &&
+                pos.y + r > center.y - 0.5f && pos.y - r < center.y + 0.5f &&
+                pos.z + r > center.z - 0.5f && pos.z - r < center.z + 0.5f) {
                 return true;
             }
         }
         return false;
     }
 
+    /** Standard yaw/pitch → direction vector */
     public Vector3 getLookDirection() {
-        return new Vector3(
-            (float) Math.cos(Math.toRadians(yaw)) * (float) Math.cos(Math.toRadians(pitch)),
-            (float) Math.sin(Math.toRadians(pitch)),
-            (float) Math.sin(Math.toRadians(yaw)) * (float) Math.cos(Math.toRadians(pitch))
-        ).nor();
+        float cy = (float)Math.cos(Math.toRadians(yaw));
+        float sy = (float)Math.sin(Math.toRadians(yaw));
+        float cp = (float)Math.cos(Math.toRadians(pitch));
+        float sp = (float)Math.sin(Math.toRadians(pitch));
+        return new Vector3(cy * cp, sp, sy * cp).nor();
     }
 
     public void resetLook() {
         pitch = 0f;
-        yaw = -90f;
+        yaw   = -90f;
     }
 }

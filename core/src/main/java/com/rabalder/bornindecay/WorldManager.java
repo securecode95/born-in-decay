@@ -15,6 +15,12 @@ public class WorldManager {
         this.generator = new WorldGenerator(seed);  // Pass the seed to WorldGenerator constructor
     }
 
+
+    public List<Vector3> getCollisionVoxels() {
+        return generator.getCollisionVoxels();
+       }
+
+
     public void update(Vector3 playerPosition) {
         generator.update(playerPosition);  // Update the world (chunks and meshes)
     }
